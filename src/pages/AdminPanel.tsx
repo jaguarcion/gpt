@@ -108,12 +108,19 @@ export function AdminPanel() {
     try {
         // Fetch all keys without pagination
         const data = await getKeys(1, -1, statusFilter);
-        const allKeys = data.keys || [];
+        const allKeys = data.keys || []; // data is { keys: [...], total: ... } if paginated, or just array if not? 
+        // Wait, getKeys returns { keys, total... } structure from backend?
+        // Let's check backend.
+        // Backend: if limit === -1, returns prisma.key.findMany() -> ARRAY directly.
+        // If limit !== -1, returns { keys: [], total: ... }
         
-        if (allKeys.length === 0) return;
+        // So we need to handle this.
+        const keysArray = Array.isArray(data) ? data : (data.keys || []);
+        
+        if (keysArray.length === 0) return;
 
         const headers = ['ID', 'Code', 'Status', 'Used By', 'Created At'];
-        const rows = allKeys.map((k: any) => [
+        const rows = keysArray.map((k: any) => [
             k.id,
             k.code,
             k.status,
