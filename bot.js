@@ -175,14 +175,15 @@ async function performActivation(ctx, email, sessionJson, type) {
             
             if (type === '3m') {
                 msg += `\n\n📅 Это первая активация из 3-х. Следующая активация запланирована автоматически через 30 дней.`;
-            } else {
-                 msg += `\n\nПриятного пользования!`;
             }
+
+            msg += `\n\nНажмите /start для новой активации.`;
             
             await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { parse_mode: 'Markdown' });
         } else {
              const errorText = result.activationResult?.message || 'Неизвестная ошибка';
-             const failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка активации*: ${errorText}`;
+             let failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка активации*: ${errorText}`;
+             failMsg += `\n\nНажмите /start для новой активации.`;
             await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
         }
 
@@ -195,12 +196,13 @@ async function performActivation(ctx, email, sessionJson, type) {
         } else if (error.response?.data?.error) {
             errorMsg += `\nДетали: ${error.response.data.error}`;
         }
-        const failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка*: ${errorMsg}`;
+        let failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка*: ${errorMsg}`;
+        failMsg += `\n\nНажмите /start для новой активации.`;
         await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
     } finally {
         isFinished = true; // Ensure loop stops
         userStates.delete(userId);
-        ctx.reply('Нажмите /start для новой активации.');
+        // ctx.reply('Нажмите /start для новой активации.');
     }
 }
 
