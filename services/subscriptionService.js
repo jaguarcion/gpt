@@ -79,21 +79,40 @@ export class SubscriptionService {
             throw new Error(`Нет доступных ключей`);
         }
 
-        // 2. Create Subscription Record
-        const subscription = await prisma.subscription.create({
-            data: {
-                email,
-                type,
-                status: 'active',
-                activationsCount: 0,
-                nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null // Next activation in 30 days if 3m
-            }
+        // Check if subscription exists
+        let subscription = await prisma.subscription.findFirst({
+            where: { email }
         });
 
-        // Notify Admins about new subscription
-        notifyAdmins(`🆕 *Новая подписка*\nEmail: \`${email}\`\nТип: ${type}\nTelegram ID: ${telegramId}`);
+        if (subscription) {
+             // Update existing subscription
+             subscription = await prisma.subscription.update({
+                 where: { id: subscription.id },
+                 data: {
+                     type,
+                     status: 'active',
+                     activationsCount: 0, // Reset for new period
+                     startDate: new Date(),
+                     nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
+                 }
+             });
+             // notifyAdmins(`♻️ *Повторная подписка*\nEmail: \`${email}\`\nТип: ${type}\nTelegram ID: ${telegramId}`);
+        } else {
+            // 2. Create Subscription Record
+            subscription = await prisma.subscription.create({
+                data: {
+                    email,
+                    type,
+                    status: 'active',
+                    activationsCount: 0,
+                    nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null // Next activation in 30 days if 3m
+                }
+            });
+            // Notify Admins about new subscription
+            // notifyAdmins(`🆕 *Новая подписка*\nEmail: \`${email}\`\nТип: ${type}\nTelegram ID: ${telegramId}`);
+        }
 
-        // 3. Save Session (if not exists or update)
+        // 3. Save Session (upsert)
         // We need session info for future activations
         // Extract expiresAt from sessionJson if possible, or default
         let expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // Default 3 months
@@ -161,8 +180,8 @@ export class SubscriptionService {
             throw new Error('Подписка не найдена');
         }
 
-        if (subscription.status === 'completed' || subscription.activationsCount >= 3) {
-            throw new Error('Подписка уже завершена или достигнут лимит активаций');
+        if (subscription.activationsCount >= 3) {
+            throw new Error('Достигнут лимит активаций (3)');
         }
 
         // Get Session

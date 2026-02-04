@@ -2,12 +2,28 @@ import prisma from './db.js';
 
 export class SessionService {
     static async createSession(email, sessionJson, expiresAt, telegramId) {
+        const existingSession = await prisma.session.findFirst({
+            where: { email },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        if (existingSession) {
+            return prisma.session.update({
+                where: { id: existingSession.id },
+                data: {
+                    sessionJson: JSON.stringify(sessionJson),
+                    expiresAt,
+                    telegramId: BigInt(telegramId)
+                }
+            });
+        }
+
         return prisma.session.create({
             data: {
                 email,
                 sessionJson: JSON.stringify(sessionJson),
                 expiresAt,
-                telegramId: BigInt(telegramId) // Prisma uses BigInt for SQLite Integer/BigInt
+                telegramId: BigInt(telegramId)
             }
         });
     }

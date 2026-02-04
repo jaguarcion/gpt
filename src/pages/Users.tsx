@@ -149,7 +149,17 @@ export function Users() {
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                {subscriptions.map((sub) => (
+                {subscriptions.map((sub) => {
+                    const start = new Date(sub.startDate);
+                    const monthsToAdd = sub.type === '3m' ? 3 : 1;
+                    const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
+                    const now = new Date();
+                    const showExtend = sub.activationsCount < 3 && (
+                        sub.status === 'active' || 
+                        (sub.status === 'completed' && endDate >= now)
+                    );
+
+                    return (
                     <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-white">{sub.email}</td>
                     <td className="px-6 py-4">
@@ -169,12 +179,7 @@ export function Users() {
                         {new Date(sub.startDate).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-zinc-400">
-                        {(() => {
-                            const start = new Date(sub.startDate);
-                            const monthsToAdd = sub.type === '3m' ? 3 : 1;
-                            const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
-                            return endDate.toLocaleDateString();
-                        })()}
+                        {endDate.toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
@@ -192,7 +197,7 @@ export function Users() {
                         </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                        {sub.status === 'active' && sub.type === '3m' && sub.activationsCount < 3 && (
+                        {showExtend && (
                             <button 
                                 onClick={() => handleManualActivate(sub.id)}
                                 className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded transition-colors"
@@ -202,7 +207,8 @@ export function Users() {
                         )}
                     </td>
                     </tr>
-                ))}
+                    );
+                })}
                 {subscriptions.length === 0 && (
                     <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">Нет подписок</td>
