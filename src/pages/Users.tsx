@@ -155,6 +155,7 @@ export function Users() {
                     const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
                     const now = new Date();
                     const showExtend = sub.activationsCount < 3 && endDate < now;
+                    const displayStatus = endDate < now ? 'completed' : 'active';
 
                     return (
                     <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors">
@@ -166,10 +167,10 @@ export function Users() {
                     </td>
                     <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded text-xs ${
-                            sub.status === 'active' ? 'bg-green-500/20 text-green-400' : 
-                            sub.status === 'completed' ? 'bg-zinc-700 text-zinc-300' : 'bg-red-500/20 text-red-400'
+                            displayStatus === 'active' ? 'bg-green-500/20 text-green-400' : 
+                            displayStatus === 'completed' ? 'bg-zinc-700 text-zinc-300' : 'bg-red-500/20 text-red-400'
                         }`}>
-                        {sub.status}
+                        {displayStatus}
                         </span>
                     </td>
                     <td className="px-6 py-4 text-zinc-400">
