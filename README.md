@@ -4,8 +4,9 @@ A comprehensive tool for activating ChatGPT CDKs (keys) via a user-friendly Web 
 
 ## 🚀 Features
 
--   **Web UI (SPA)**: Modern, dark-themed interface built with React & Tailwind CSS.
+-   **Web UI (SPA)**: Modern, dark-themed interface built with React & Tailwind CSS (Fully localized in Russian).
 -   **API Server**: Local Node.js server to activate keys programmatically via HTTP requests.
+-   **Secure Access**: API protected by Bearer Token authentication.
 -   **Automatic Polling**: Handles the asynchronous activation queue automatically.
 -   **CORS Proxy**: Configured to communicate securely with the upstream activation service.
 -   **Real-time Logs**: Visual feedback of every step in the activation process.
@@ -53,14 +54,24 @@ Use this to integrate activation into your own scripts or bots.
     ```
     *Server runs on `http://localhost:3001`*
 
+    > **Tip**: To run the server in the background, use PM2:
+    > ```bash
+    > npm install -g pm2
+    > pm2 start server.js --name "gpt-api"
+    > pm2 save
+    > pm2 startup
+    > ```
+
 2.  Send a POST request to activate a key:
 
     **Endpoint:** `POST http://localhost:3001/api/activate-key`
+    **Auth:** Bearer Token (Default: `my-secret-token-123` - change in `server.js`)
 
     **cURL Example:**
     ```bash
     curl -X POST http://localhost:3001/api/activate-key \
       -H "Content-Type: application/json" \
+      -H "Authorization: Bearer my-secret-token-123" \
       -d '{
         "cdk": "YOUR_CDK_KEY",
         "sessionJson": "YOUR_SESSION_JSON_STRING_OR_OBJECT"
@@ -80,7 +91,41 @@ Use this to integrate activation into your own scripts or bots.
     }
     ```
 
+## 🚢 Production Deployment
+
+### Build Frontend
+To build the static files for production:
+```bash
+npm run build
+```
+The output will be in the `dist` directory.
+
+### Nginx Configuration
+To serve the SPA and proxy API requests correctly, use the following Nginx configuration block:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    root /path/to/project/dist; # Point to the 'dist' folder
+    index index.html;
+
+    # Serve React SPA
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API Requests
+    location /api/ {
+        proxy_pass https://freespaces.gmailshop.top/api/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host freespaces.gmailshop.top;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
 ## ⚠️ Notes
 
 -   **Session JSON**: This is the full JSON object containing your user session details (cookies/tokens) required by the upstream provider.
--   **Proxy**: The project uses a proxy to bypass CORS restrictions enforced by the upstream API (`freespaces.gmailshop.top`).
+-   **Currency Conflict**: If you receive a 400 error about "currency mismatch" (e.g., KZT vs USD), try using a fresh OpenAI account without prior transaction history.

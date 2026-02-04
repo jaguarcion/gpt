@@ -1,14 +1,45 @@
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
+import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
-const PORT = 3001;
-// Simple static token for now. In production, consider environment variables.
-const API_TOKEN = 'my-secret-token-123'; 
+const PORT = process.env.PORT || 3001;
+const API_TOKEN = process.env.API_TOKEN;
 
-app.use(cors());
+if (!API_TOKEN) {
+    console.error('FATAL ERROR: API_TOKEN is not defined in .env');
+    process.exit(1);
+}
+
+// Security: Rate Limiter
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { error: 'Too many requests, please try again later.' }
+});
+
+// Security: CORS Configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    }
+}));
+
 app.use(express.json());
+
+// Apply rate limiting to all requests
+app.use(limiter);
 
 const BASE_URL = 'https://freespaces.gmailshop.top';
 
@@ -21,6 +52,8 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) return res.status(401).json({ error: 'Unauthorized: Missing token' });
+    // Use timingSafeEqual in production for better security against timing attacks, 
+    // but for simple token simple comparison is often enough for this scale.
     if (token !== API_TOKEN) return res.status(403).json({ error: 'Forbidden: Invalid token' });
 
     next();
