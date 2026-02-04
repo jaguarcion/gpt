@@ -80,10 +80,17 @@ bot.on('text', async (ctx) => {
     }
 
     if (currentState.step === 'WAITING_SESSION') {
+        // Remove markdown code blocks if present
+        let cleanText = text.replace(/^```[\s\S]*?\n/, '').replace(/```$/, '').trim();
+        // Also remove inline code blocks if wrapped in single backticks
+        if (cleanText.startsWith('`') && cleanText.endsWith('`')) {
+            cleanText = cleanText.slice(1, -1);
+        }
+        
         // Validate JSON and extract email
         let sessionData;
         try {
-            sessionData = JSON.parse(text);
+            sessionData = JSON.parse(cleanText);
         } catch (e) {
             return ctx.reply('Это не похоже на валидный JSON. Пожалуйста, проверьте формат и отправьте снова, или нажмите /cancel для отмены.');
         }
@@ -93,14 +100,14 @@ bot.on('text', async (ctx) => {
         
         if (!email) {
             // Ask for email manually if not found
-            currentState.sessionJson = text;
+            currentState.sessionJson = cleanText;
             currentState.step = 'WAITING_EMAIL';
             userStates.set(userId, currentState);
             return ctx.reply('Не удалось найти email в JSON сессии.\n\nПожалуйста, отправьте *email* аккаунта отдельным сообщением:', { parse_mode: 'Markdown' });
         }
 
         // Proceed to activation
-        await performActivation(ctx, email, text, currentState.type);
+        await performActivation(ctx, email, cleanText, currentState.type);
     } else if (currentState.step === 'WAITING_EMAIL') {
         // Validate email format simple
         if (!text.includes('@')) {

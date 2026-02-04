@@ -49,6 +49,11 @@ export const getKeys = async (page = 1, limit = 20, status = 'all') => {
   return response.data;
 };
 
+export const manualActivateSubscription = async (id: number) => {
+  const response = await adminApi.post(`/subscriptions/${id}/activate`);
+  return response.data;
+};
+
 export const deleteKey = async (id: number) => {
   const response = await adminApi.delete(`/keys/${id}`);
   return response.data;

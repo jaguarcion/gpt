@@ -104,6 +104,39 @@ export function AdminPanel() {
       }
   };
 
+  const handleExportCSV = async () => {
+    try {
+        // Fetch all keys without pagination
+        const data = await getKeys(1, -1, statusFilter);
+        const allKeys = data.keys || [];
+        
+        if (allKeys.length === 0) return;
+
+        const headers = ['ID', 'Code', 'Status', 'Used By', 'Created At'];
+        const rows = allKeys.map((k: any) => [
+            k.id,
+            k.code,
+            k.status,
+            k.usedByEmail || '-',
+            new Date(k.createdAt).toLocaleDateString()
+        ].join(','));
+
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + [headers.join(','), ...rows].join('\n');
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `keys_export_${statusFilter}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) {
+        console.error('Export error:', e);
+        setMessage({ text: 'Ошибка при экспорте', type: 'error' });
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
@@ -216,6 +249,12 @@ export function AdminPanel() {
                         Used
                     </button>
                 </div>
+                <button 
+                    onClick={handleExportCSV}
+                    className="text-sm px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors text-zinc-300"
+                >
+                    Скачать CSV
+                </button>
             </div>
 
             <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">

@@ -1,7 +1,29 @@
+import { Telegraf } from 'telegraf';
 import prisma from './db.js';
 import { KeyService } from './keyService.js';
 import { SessionService } from './sessionService.js';
 import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const ALLOWED_USERS = (process.env.ALLOWED_TELEGRAM_USERS || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(id => id.length > 0);
+
+const bot = new Telegraf(BOT_TOKEN);
+
+const notifyAdmins = async (message) => {
+    for (const userId of ALLOWED_USERS) {
+        try {
+            await bot.telegram.sendMessage(userId, message, { parse_mode: 'Markdown' });
+        } catch (e) {
+            console.error(`Failed to send notification to ${userId}:`, e.message);
+        }
+    }
+};
 
 // Local API URL for activation requests (calls the existing /api/activate-key endpoint)
 // We reuse the existing activation logic which handles the external API interaction
@@ -68,6 +90,9 @@ export class SubscriptionService {
             }
         });
 
+        // Notify Admins about new subscription
+        notifyAdmins(`🆕 *Новая подписка*\nEmail: \`${email}\`\nТип: ${type}\nTelegram ID: ${telegramId}`);
+
         // 3. Save Session (if not exists or update)
         // We need session info for future activations
         // Extract expiresAt from sessionJson if possible, or default
@@ -127,6 +152,56 @@ export class SubscriptionService {
         }
     }
 
+    static async manualActivate(subscriptionId) {
+        const subscription = await prisma.subscription.findUnique({
+            where: { id: Number(subscriptionId) }
+        });
+
+        if (!subscription) {
+            throw new Error('Подписка не найдена');
+        }
+
+        if (subscription.status === 'completed' || subscription.activationsCount >= 3) {
+            throw new Error('Подписка уже завершена или достигнут лимит активаций');
+        }
+
+        // Get Session
+        const session = await SessionService.getSessionByEmail(subscription.email);
+        if (!session) {
+            throw new Error('Сессия не найдена');
+        }
+
+        // Get Key
+        const key = await KeyService.getAvailableKey();
+        if (!key) {
+            throw new Error('Нет доступных ключей');
+        }
+
+        // Activate
+        const result = await this.activateKeyForSubscription(subscription.id, key.code, session.sessionJson);
+
+        if (result.success) {
+            await KeyService.markKeyAsUsed(key.id, subscription.email, subscription.id);
+            
+            const newCount = subscription.activationsCount + 1;
+            const isFinished = newCount >= 3;
+            
+            await prisma.subscription.update({
+                where: { id: subscription.id },
+                data: { 
+                    activationsCount: newCount,
+                    status: isFinished ? 'completed' : 'active',
+                    nextActivationDate: isFinished ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                }
+            });
+
+            notifyAdmins(`🛠 *Ручная активация*\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
+            return { success: true, message: 'Успешно активировано', round: newCount };
+        } else {
+            throw new Error(result.message || 'Ошибка активации');
+        }
+    }
+
     static async processScheduledActivations() {
         const now = new Date();
         // Find active subscriptions where nextActivationDate is past due
@@ -163,6 +238,7 @@ export class SubscriptionService {
                 const key = await KeyService.getAvailableKey();
                 if (!key) {
                     console.error(`[Scheduler] No keys available for ${sub.email}`);
+                    notifyAdmins(`🚨 *КРИТИЧЕСКАЯ ОШИБКА*\nЗакончились ключи для продления!\nEmail: \`${sub.email}\`\nСрочно добавьте ключи!`);
                     continue; // Try next time
                 }
 
@@ -184,8 +260,10 @@ export class SubscriptionService {
                         }
                     });
                     console.log(`[Scheduler] Successfully activated round ${newCount} for ${sub.email}`);
+                    notifyAdmins(`🔄 *Успешное продление*\nEmail: \`${sub.email}\`\nРаунд: ${newCount}/3\nID Подписки: ${sub.id}`);
                 } else {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
+                    notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
                 }
 
             } catch (e) {

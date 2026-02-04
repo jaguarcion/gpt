@@ -162,6 +162,17 @@ app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/subscriptions/:id/activate', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await SubscriptionService.manualActivate(id);
+        res.json(result);
+    } catch (e) {
+        console.error('Manual Activation Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Legacy Endpoint (keep for backward compatibility or direct key usage)
 app.post('/api/activate-key', authenticateToken, async (req, res) => {
 // ... (existing implementation)

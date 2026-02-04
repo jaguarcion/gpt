@@ -58,6 +58,12 @@ export class KeyService {
     }
 
     static async getAllKeys(page = 1, limit = 20, status = 'all') {
+        if (limit === -1) {
+             return prisma.key.findMany({
+                orderBy: { createdAt: 'desc' }
+             });
+        }
+        
         const skip = (page - 1) * limit;
         const where = {};
         
