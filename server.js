@@ -59,7 +59,80 @@ const authenticateToken = (req, res, next) => {
     next();
 };
 
+import { KeyService } from './services/keyService.js';
+import { SessionService } from './services/sessionService.js';
+import { SubscriptionService } from './services/subscriptionService.js';
+
+// ... (existing imports and config)
+
+app.post('/api/keys', authenticateToken, async (req, res) => {
+    try {
+        const { code, codes } = req.body;
+        
+        // Handle bulk upload
+        if (codes && Array.isArray(codes)) {
+            const result = await KeyService.addKeys(codes);
+            return res.json({ success: true, count: result.count });
+        }
+
+        // Handle single upload (legacy or simple)
+        if (code) {
+            const key = await KeyService.addKey(code);
+            return res.json(key);
+        }
+        
+        return res.status(400).json({ error: 'Code or codes array required' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/keys', authenticateToken, async (req, res) => {
+    try {
+        const keys = await KeyService.getAllKeys();
+        res.json(keys);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/keys/stats', authenticateToken, async (req, res) => {
+    try {
+        const stats = await KeyService.getStats();
+        res.json(stats);
+    } catch (e) {
+        console.error('Stats Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// New Endpoint for Bot/Admin to create subscription and activate
+app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
+    try {
+        const { email, sessionJson, subscriptionType, telegramId } = req.body;
+        
+        if (!email || !sessionJson || !subscriptionType || !telegramId) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const result = await SubscriptionService.createSubscription(
+            email, 
+            subscriptionType, 
+            telegramId, 
+            sessionJson
+        );
+
+        res.json(result);
+
+    } catch (e) {
+        console.error('Subscription Error:', e.message);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// Legacy Endpoint (keep for backward compatibility or direct key usage)
 app.post('/api/activate-key', authenticateToken, async (req, res) => {
+// ... (existing implementation)
     const { cdk, sessionJson } = req.body;
 
     if (!cdk || !sessionJson) {

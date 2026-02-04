@@ -6,8 +6,22 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   server: {
     proxy: {
-      '/api': {
+      // 1. External API (Manual Activation)
+      '/api/cdks': {
         target: 'https://freespaces.gmailshop.top',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path
+      },
+      '/api/stocks': {
+        target: 'https://freespaces.gmailshop.top',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path
+      },
+      // 2. Local Backend (Admin API & Bot)
+      '/api': {
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path

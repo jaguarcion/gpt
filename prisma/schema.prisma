@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Key Model
+model Key {
+  id            Int            @id @default(autoincrement())
+  code          String         @unique
+  status        String         @default("active") // active, used
+  // type removed
+  usedAt        DateTime?
+  usedByEmail   String?
+  createdAt     DateTime       @default(now())
+  
+  // Relations
+  // A key is used by ONE subscription.
+  subscriptionId Int?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("keys")
+}
+
+// Session Model
+model Session {
+  id            Int            @id @default(autoincrement())
+  email         String
+  sessionJson   String         // Stored as stringified JSON because SQLite doesn't support JSON type natively well in all Prisma versions, string is safer
+  expiresAt     DateTime
+  telegramId    BigInt
+  createdAt     DateTime       @default(now())
+  
+  @@map("sessions")
+}
+
+// Subscription Model
+model Subscription {
+  id                  Int      @id @default(autoincrement())
+  email               String
+  type                String   // 1m, 3m
+  startDate           DateTime @default(now())
+  nextActivationDate  DateTime?
+  status              String   @default("active") // active, completed
+  activationsCount    Int      @default(0)
+  createdAt           DateTime @default(now())
+  
+  // Relations
+  keys                Key[]
+  
+  @@map("subscriptions")
+}
