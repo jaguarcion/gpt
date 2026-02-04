@@ -47,10 +47,10 @@ const userStates = new Map();
 bot.start((ctx) => {
     userStates.delete(ctx.from.id);
     const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('1 месяц (1 ключ)', 'plan_1m')],
-        [Markup.button.callback('3 месяца (3 ключа)', 'plan_3m')]
+        [Markup.button.callback('1 месяц', 'plan_1m')],
+        [Markup.button.callback('3 месяца', 'plan_3m')]
     ]);
-    ctx.reply('Привет! Я бот для активации GPT CDK.\n\nВыберите тип подписки:', { parse_mode: 'Markdown', ...keyboard });
+    ctx.reply('Выберите тип подписки:', { parse_mode: 'Markdown', ...keyboard });
 });
 
 bot.command('cancel', (ctx) => {
@@ -60,13 +60,13 @@ bot.command('cancel', (ctx) => {
 
 bot.action('plan_1m', (ctx) => {
     userStates.set(ctx.from.id, { step: 'WAITING_SESSION', type: '1m' });
-    ctx.reply('Вы выбрали: *1 месяц*.\n\nТеперь отправьте мне *JSON сессии*.', { parse_mode: 'Markdown' });
+    ctx.reply('Вы выбрали: *1 месяц*.\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
     ctx.answerCbQuery();
 });
 
 bot.action('plan_3m', (ctx) => {
     userStates.set(ctx.from.id, { step: 'WAITING_SESSION', type: '3m' });
-    ctx.reply('Вы выбрали: *3 месяца*.\n(Бот будет активировать по 1 ключу каждый месяц).\n\nТеперь отправьте мне *JSON сессии*.', { parse_mode: 'Markdown' });
+    ctx.reply('Вы выбрали: *3 месяца*.\n(Бот будет активировать по 1 ключу каждый месяц).\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
     ctx.answerCbQuery();
 });
 

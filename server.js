@@ -2,12 +2,14 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const app = express();
 app.set('trust proxy', 1); // Trust Nginx proxy
+app.use(helmet()); // Set secure HTTP headers
 const PORT = process.env.PORT || 3001;
 const API_TOKEN = process.env.API_TOKEN;
 
