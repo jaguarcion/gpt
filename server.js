@@ -186,6 +186,9 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
     console.log(`[${new Date().toISOString()}] Received activation request for key: ${cdk}`);
 
     try {
+        // --- OPTIMIZATION: Skipped separate key check to save time. 
+        // The activation request handles validation internally or returns error.
+        /*
         // --- STEP 1: CHECK KEY ---
         console.log(`[${cdk}] Step 1: Checking key...`);
         const checkRes = await axios.post(`${BASE_URL}/api/cdks/public/check`, 
@@ -197,9 +200,10 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
             console.log(`[${cdk}] Key is already used.`);
             return res.status(400).json({ success: false, message: 'Key is already used' });
         }
+        */
 
         // --- STEP 2: REQUEST ACTIVATION ---
-        console.log(`[${cdk}] Step 2: Requesting activation...`);
+        console.log(`[${cdk}] Step 1: Requesting activation...`);
         
         // Ensure sessionJson is a string (if passed as object, stringify it)
         // The API expects the 'user' field to be the JSON string of the session
@@ -231,10 +235,11 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
         // --- STEP 3: POLL STATUS ---
         let isPending = true;
         let attempts = 0;
-        const maxAttempts = 60; // 2 minutes
+        const maxAttempts = 120; // 2 minutes (120 * 1s)
 
         while (isPending && attempts < maxAttempts) {
-            await sleep(2000);
+            // Wait 1s instead of 2s for faster feedback
+            await sleep(1000);
             attempts++;
 
             const statusRes = await axios.get(`${BASE_URL}/api/stocks/public/outstock/${taskId}`);
