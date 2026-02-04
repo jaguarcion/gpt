@@ -100,30 +100,6 @@ npm run build
 ```
 The output will be in the `dist` directory.
 
-### Nginx Configuration
-To serve the SPA and proxy API requests correctly, use the following Nginx configuration block:
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    root /path/to/project/dist; # Point to the 'dist' folder
-    index index.html;
-
-    # Serve React SPA
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Proxy API Requests
-    location /api/ {
-        proxy_pass https://freespaces.gmailshop.top/api/;
-        proxy_ssl_server_name on;
-        proxy_set_header Host freespaces.gmailshop.top;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
 
 ## ⚠️ Notes
 
