@@ -34,6 +34,8 @@ export function AdminPanel() {
       } else {
          setMessage({ text: 'Ошибка сети или сервера', type: 'error' });
       }
+      setIsAuthenticated(false);
+      localStorage.removeItem('adminToken');
     }
   };
 
@@ -47,6 +49,7 @@ export function AdminPanel() {
         setTotalPages(keysData.totalPages);
     } catch (e) {
         console.error("Load data error", e);
+        throw e; // Re-throw to handle it in caller
     }
   };
 
