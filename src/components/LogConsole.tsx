@@ -23,14 +23,13 @@ export const LogConsole: React.FC<Props> = ({ logs }) => {
   return (
     <div className="mt-6 rounded-md border border-zinc-800 bg-zinc-950 p-4">
       <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-        ВЫВОД КОНСОЛИ
       </div>
       <div 
         ref={scrollRef}
         className="h-64 overflow-y-auto font-mono text-sm space-y-1"
       >
         {logs.length === 0 && (
-          <div className="text-zinc-600 italic">Готово к запуску...</div>
+          <div className="text-zinc-600 italic"></div>
         )}
         {logs.map((log, index) => (
           <div key={index} className="flex gap-2">
