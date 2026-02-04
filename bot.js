@@ -119,7 +119,39 @@ bot.on('text', async (ctx) => {
 
 async function performActivation(ctx, email, sessionJson, type) {
     const userId = ctx.from.id;
-    ctx.reply(`Данные получены (${type}, ${email}).\nНачинаю активацию... ⏳`);
+    const initialMsg = await ctx.reply(`Данные получены (${type}, ${email}).\nНачинаю активацию... ⏳`);
+
+    let isFinished = false;
+    
+    // Simulated progress steps
+    const progressSteps = [
+        { delay: 2000, text: 'Проверяю доступность ключа... 🔎' },
+        { delay: 5000, text: 'Ключ найден. Отправляю запрос на активацию... 🚀' },
+        { delay: 10000, text: 'Запрос отправлен. Ожидаю подтверждения от сервера... 🔄' },
+        { delay: 20000, text: 'Всё еще ожидаю подтверждения (это может занять время)... 🕒' }
+    ];
+
+    // Start progress simulation loop
+    (async () => {
+        for (const step of progressSteps) {
+            await new Promise(r => setTimeout(r, step.delay));
+            if (isFinished) break;
+            try {
+                // Check if isFinished became true during await
+                if (!isFinished) {
+                    await ctx.telegram.editMessageText(
+                        initialMsg.chat.id, 
+                        initialMsg.message_id, 
+                        undefined, 
+                        `Данные получены (${type}, ${email}).\n${step.text}`, 
+                        { parse_mode: 'Markdown' }
+                    );
+                }
+            } catch (e) {
+                // Ignore edit errors (e.g. message not modified or user blocked)
+            }
+        }
+    })();
 
     try {
         const response = await axios.post(API_URL, {
@@ -134,22 +166,28 @@ async function performActivation(ctx, email, sessionJson, type) {
             }
         });
 
+        isFinished = true;
         const result = response.data; // { subscription, activationResult }
 
         if (result.activationResult && result.activationResult.success) {
             const taskId = result.activationResult.data?.task_id || 'N/A';
-            let msg = `✅ *Успешно активировано!*\n\nEmail: \`${email}\`\nTask ID: \`${taskId}\``;
+            let msg = `Данные получены (${type}, ${email}).\n✅ *Успешно активировано!*`;
             
             if (type === '3m') {
                 msg += `\n\n📅 Это первая активация из 3-х. Следующая активация запланирована автоматически через 30 дней.`;
+            } else {
+                 msg += `\n\nПриятного пользования!`;
             }
             
-            ctx.reply(msg, { parse_mode: 'Markdown' });
+            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { parse_mode: 'Markdown' });
         } else {
-            ctx.reply(`❌ *Ошибка активации*\n\n${result.activationResult?.message || 'Неизвестная ошибка'}`, { parse_mode: 'Markdown' });
+             const errorText = result.activationResult?.message || 'Неизвестная ошибка';
+             const failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка активации*: ${errorText}`;
+            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
         }
 
     } catch (error) {
+        isFinished = true;
         console.error('Bot Activation Error:', error.message);
         let errorMsg = 'Произошла ошибка при обращении к серверу.';
         if (error.response?.data?.message) {
@@ -157,8 +195,10 @@ async function performActivation(ctx, email, sessionJson, type) {
         } else if (error.response?.data?.error) {
             errorMsg += `\nДетали: ${error.response.data.error}`;
         }
-        ctx.reply(`❌ *Ошибка*\n\n${errorMsg}`, { parse_mode: 'Markdown' });
+        const failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка*: ${errorMsg}`;
+        await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
     } finally {
+        isFinished = true; // Ensure loop stops
         userStates.delete(userId);
         ctx.reply('Нажмите /start для новой активации.');
     }
