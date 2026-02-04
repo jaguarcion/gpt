@@ -8,12 +8,37 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_TOKEN = process.env.API_TOKEN;
 const API_URL = `http://localhost:${process.env.PORT || 3001}/api/activate-key`;
 
+// Parse allowed users from .env (comma-separated IDs)
+const ALLOWED_USERS = (process.env.ALLOWED_TELEGRAM_USERS || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(id => id.length > 0)
+    .map(Number); // Convert to numbers for comparison
+
 if (!BOT_TOKEN || BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
     console.error('FATAL ERROR: TELEGRAM_BOT_TOKEN is not defined in .env');
     process.exit(1);
 }
 
 const bot = new Telegraf(BOT_TOKEN);
+
+// Middleware to check authorization
+bot.use((ctx, next) => {
+    if (!ctx.from) return next();
+    
+    const userId = ctx.from.id;
+    
+    // If ALLOWED_USERS is empty, allow everyone (or restrict if you prefer secure-by-default)
+    // Here we assume if the variable is set, we restrict. If not set, we might warn or allow all.
+    // Let's implement Strict Mode: if variable exists but user not in it -> deny.
+    
+    if (ALLOWED_USERS.length > 0 && !ALLOWED_USERS.includes(userId)) {
+        console.log(`Unauthorized access attempt from user: ${userId} (${ctx.from.username})`);
+        return ctx.reply('⛔ У вас нет доступа к этому боту.');
+    }
+    
+    return next();
+});
 
 // State management (in-memory for simplicity)
 // Map<userId, { step: 'WAITING_KEY' | 'WAITING_SESSION', cdk: string }>
