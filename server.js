@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1); // Trust Nginx proxy
 const PORT = process.env.PORT || 3001;
 const API_TOKEN = process.env.API_TOKEN;
 
