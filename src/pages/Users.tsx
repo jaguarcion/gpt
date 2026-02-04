@@ -154,10 +154,7 @@ export function Users() {
                     const monthsToAdd = sub.type === '3m' ? 3 : 1;
                     const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
                     const now = new Date();
-                    const showExtend = sub.activationsCount < 3 && (
-                        sub.status === 'active' || 
-                        (sub.status === 'completed' && endDate >= now)
-                    );
+                    const showExtend = sub.activationsCount < 3 && endDate < now;
 
                     return (
                     <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors">
