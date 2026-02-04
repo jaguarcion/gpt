@@ -4,6 +4,8 @@ import axios from 'axios';
 
 const app = express();
 const PORT = 3001;
+// Simple static token for now. In production, consider environment variables.
+const API_TOKEN = 'my-secret-token-123'; 
 
 app.use(cors());
 app.use(express.json());
@@ -13,7 +15,18 @@ const BASE_URL = 'https://freespaces.gmailshop.top';
 // Utility to wait
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-app.post('/api/activate-key', async (req, res) => {
+// Auth Middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) return res.status(401).json({ error: 'Unauthorized: Missing token' });
+    if (token !== API_TOKEN) return res.status(403).json({ error: 'Forbidden: Invalid token' });
+
+    next();
+};
+
+app.post('/api/activate-key', authenticateToken, async (req, res) => {
     const { cdk, sessionJson } = req.body;
 
     if (!cdk || !sessionJson) {
