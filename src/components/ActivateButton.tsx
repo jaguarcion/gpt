@@ -20,10 +20,10 @@ export const ActivateButton: React.FC<Props> = ({ onClick, isLoading, disabled }
     {isLoading ? (
       <>
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Processing...
+        Обработка...
       </>
     ) : (
-      'Activate'
+      'Активировать'
     )}
   </button>
 );

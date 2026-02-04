@@ -9,7 +9,7 @@ interface Props {
 export const SessionInput: React.FC<Props> = ({ value, onChange, disabled }) => (
   <div className="space-y-2">
     <label htmlFor="session-json" className="block text-sm font-medium text-zinc-300">
-      Session JSON
+      JSON сессии
     </label>
     <textarea
       id="session-json"
@@ -18,7 +18,7 @@ export const SessionInput: React.FC<Props> = ({ value, onChange, disabled }) => 
       disabled={disabled}
       rows={6}
       className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 font-mono text-sm"
-      placeholder='Paste your full session JSON here...'
+      placeholder='Вставьте здесь полный JSON сессии...'
     />
   </div>
 );

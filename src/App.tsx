@@ -20,30 +20,30 @@ function App() {
 
   const handleActivate = async () => {
     if (!cdkKey.trim()) {
-      addLog('Error: CDK Key is required', 'error');
+      addLog('Ошибка: Требуется CDK-ключ', 'error');
       return;
     }
     if (!sessionJson.trim()) {
-      addLog('Error: Session JSON is required', 'error');
+      addLog('Ошибка: Требуется JSON сессии', 'error');
       return;
     }
 
     setIsLoading(true);
     setLogs([]); // Clear previous logs
-    addLog('Starting activation process...', 'info');
+    addLog('Запуск процесса активации...', 'info');
 
     try {
       // Step 1: Check Key
-      addLog(`Checking key: ${cdkKey}...`, 'info');
+      addLog(`Проверка ключа: ${cdkKey}...`, 'info');
       const checkResult = await checkKey(cdkKey);
       
       if (checkResult.used) {
-        throw new Error('Key has already been used.');
+        throw new Error('Ключ уже использован.');
       }
-      addLog('Key is valid.', 'success');
+      addLog('Ключ действителен.', 'success');
 
       // Step 2: Request Activation
-      addLog('Submitting activation request...', 'info');
+      addLog('Отправка запроса на активацию...', 'info');
       
       // Parse sessionJson to ensure it's valid, but send as string if that's what API expects
       // The PRD says "API expects user field to be string or object".
@@ -56,7 +56,7 @@ function App() {
         // Validate JSON format
         sessionData = JSON.parse(sessionJson);
       } catch (e) {
-        throw new Error('Invalid Session JSON format.');
+        throw new Error('Неверный формат JSON сессии.');
       }
 
       // API expects the user field to be a JSON string, not an object
@@ -64,12 +64,12 @@ function App() {
       const taskId = activationResult; // API returns the UUID string directly
       
       if (!taskId) {
-        throw new Error('No taskId returned from activation request.');
+        throw new Error('Не получен taskId от запроса активации.');
       }
-      addLog(`Request submitted. Task ID: ${taskId}`, 'success');
+      addLog(`Запрос отправлен. ID задачи: ${taskId}`, 'success');
 
       // Step 3: Poll Status
-      addLog('Waiting for activation...', 'info');
+      addLog('Ожидание активации...', 'info');
       let isPending = true;
       let attempts = 0;
       const maxAttempts = 60; // Timeout after ~2 minutes
@@ -84,24 +84,24 @@ function App() {
         if (!statusResult.pending) {
           isPending = false;
           if (statusResult.success) {
-            addLog('Successfully activated!', 'success');
+            addLog('Успешно активировано!', 'success');
           } else {
-            const errorMsg = statusResult.message || 'Activation failed with unknown error.';
+            const errorMsg = statusResult.message || 'Активация не удалась с неизвестной ошибкой.';
             // Sometimes the API returns success: false but with a message explaining why
             throw new Error(errorMsg);
           }
         } else {
-          addLog(`Status: Pending... (Attempt ${attempts}/${maxAttempts})`, 'info');
+          addLog(`Статус: В ожидании... (Попытка ${attempts}/${maxAttempts})`, 'info');
         }
       }
 
       if (isPending) {
-        throw new Error('Activation timed out. Please check the status manually later.');
+        throw new Error('Время ожидания активации истекло. Пожалуйста, проверьте статус вручную позже.');
       }
 
     } catch (error: any) {
       console.error('Activation error:', error);
-      let errorMessage = error.message || 'Unknown error occurred';
+      let errorMessage = error.message || 'Произошла неизвестная ошибка';
 
       if (error.response) {
         console.log('Error Response:', error.response);
@@ -115,10 +115,10 @@ function App() {
                             JSON.stringify(error.response.data);
            }
         }
-        errorMessage += ` (Status: ${error.response.status})`;
+        errorMessage += ` (Статус: ${error.response.status})`;
       }
       
-      addLog(`Error: ${errorMessage}`, 'error');
+      addLog(`Ошибка: ${errorMessage}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -127,15 +127,6 @@ function App() {
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-lg space-y-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-white">
-            GPT CDK Activator
-          </h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            Securely activate your access key
-          </p>
-        </div>
-
         <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 shadow-xl backdrop-blur-sm space-y-6">
           <KeyInput 
             value={cdkKey} 
