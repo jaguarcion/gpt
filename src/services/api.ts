@@ -42,8 +42,15 @@ export const getStats = async () => {
   return response.data;
 };
 
-export const getKeys = async () => {
-  const response = await adminApi.get('/keys'); // becomes /api/keys
+export const getKeys = async (page = 1, limit = 20, status = 'all') => {
+  const response = await adminApi.get('/keys', {
+    params: { page, limit, status }
+  });
+  return response.data;
+};
+
+export const deleteKey = async (id: number) => {
+  const response = await adminApi.delete(`/keys/${id}`);
   return response.data;
 };
 

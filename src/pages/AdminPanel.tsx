@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { getStats, getKeys, addKey, setAuthToken } from '../services/api';
+import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
 import { LogEntry } from '../components/LogConsole';
 import { Link } from 'react-router-dom';
 
 export function AdminPanel() {
   const [token, setToken] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [keys, setKeys] = useState<any[]>([]);
   const [newKeyCodes, setNewKeyCodes] = useState('');
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  
+  // New states for pagination and filtering
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const handleLogin = async () => {
     if (!token) return;
@@ -30,11 +37,17 @@ export function AdminPanel() {
     }
   };
 
-  const loadData = async () => {
-    const statsData = await getStats();
-    const keysData = await getKeys();
-    setStats(statsData);
-    setKeys(keysData);
+  const loadData = async (currentPage = page, currentStatus = statusFilter) => {
+    try {
+        const statsData = await getStats();
+        const keysData = await getKeys(currentPage, limit, currentStatus);
+        
+        setStats(statsData);
+        setKeys(keysData.keys);
+        setTotalPages(keysData.totalPages);
+    } catch (e) {
+        console.error("Load data error", e);
+    }
   };
 
   useEffect(() => {
@@ -42,9 +55,24 @@ export function AdminPanel() {
     if (savedToken) {
       setToken(savedToken);
       setAuthToken(savedToken);
-      loadData().then(() => setIsAuthenticated(true)).catch(() => localStorage.removeItem('adminToken'));
+      loadData(1, 'all') // Initial load
+        .then(() => setIsAuthenticated(true))
+        .catch(() => {
+          localStorage.removeItem('adminToken');
+          setIsAuthenticated(false);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
   }, []);
+
+  // Reload when page or filter changes
+  useEffect(() => {
+      if (isAuthenticated) {
+          loadData();
+      }
+  }, [page, statusFilter]);
 
   const handleAddKey = async () => {
     try {
@@ -62,10 +90,28 @@ export function AdminPanel() {
       setMessage({ text: e.response?.data?.error || e.message, type: 'error' });
     }
   };
+  
+  const handleDeleteKey = async (id: number) => {
+      if (!window.confirm('Вы уверены, что хотите удалить этот ключ?')) return;
+      try {
+          await deleteKey(id);
+          loadData(); // Reload list
+      } catch (e: any) {
+          setMessage({ text: 'Ошибка при удалении', type: 'error' });
+      }
+  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-zinc-500">Загрузка...</div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -145,46 +191,104 @@ export function AdminPanel() {
         </div>
 
         {/* Keys List */}
-        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-900 text-zinc-400 uppercase text-xs">
-              <tr>
-                <th className="px-6 py-3">ID</th>
-                <th className="px-6 py-3">Code</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Used By</th>
-                <th className="px-6 py-3">Created At</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800">
-              {keys.map((key) => (
-                <tr key={key.id} className="hover:bg-zinc-800/50 transition-colors">
-                  <td className="px-6 py-4 font-mono text-zinc-500">{key.id}</td>
-                  <td className="px-6 py-4 font-mono text-zinc-300">
-                    <span 
-                      onClick={() => copyToClipboard(key.code)} 
-                      className="cursor-pointer hover:text-white"
-                      title="Click to copy"
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => { setStatusFilter('all'); setPage(1); }}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
                     >
-                      {key.code}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded text-xs ${key.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-zinc-700 text-zinc-400'}`}>
-                      {key.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-zinc-400">{key.usedByEmail || '-'}</td>
-                  <td className="px-6 py-4 text-zinc-500">{new Date(key.createdAt).toLocaleDateString()}</td>
-                </tr>
-              ))}
-              {keys.length === 0 && (
+                        Все
+                    </button>
+                    <button 
+                        onClick={() => { setStatusFilter('active'); setPage(1); }}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                        Active
+                    </button>
+                    <button 
+                        onClick={() => { setStatusFilter('used'); setPage(1); }}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'used' ? 'bg-zinc-700 text-zinc-300' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    >
+                        Used
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-zinc-900 text-zinc-400 uppercase text-xs">
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-zinc-500">Нет ключей</td>
+                    <th className="px-6 py-3">ID</th>
+                    <th className="px-6 py-3">Code</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3">Used By</th>
+                    <th className="px-6 py-3">Created At</th>
+                    <th className="px-6 py-3"></th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                {keys.map((key) => (
+                    <tr key={key.id} className="hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-6 py-4 font-mono text-zinc-500">{key.id}</td>
+                    <td className="px-6 py-4 font-mono text-zinc-300">
+                        <span 
+                        onClick={() => copyToClipboard(key.code)} 
+                        className="cursor-pointer hover:text-white"
+                        title="Click to copy"
+                        >
+                        {key.code}
+                        </span>
+                    </td>
+                    <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded text-xs ${key.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-zinc-700 text-zinc-400'}`}>
+                        {key.status}
+                        </span>
+                    </td>
+                    <td className="px-6 py-4 text-zinc-400">{key.usedByEmail || '-'}</td>
+                    <td className="px-6 py-4 text-zinc-500">{new Date(key.createdAt).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-right">
+                        <button 
+                            onClick={() => handleDeleteKey(key.id)}
+                            className="text-zinc-600 hover:text-red-500 transition-colors"
+                            title="Удалить"
+                        >
+                            ✕
+                        </button>
+                    </td>
+                    </tr>
+                ))}
+                {keys.length === 0 && (
+                    <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">Нет ключей</td>
+                    </tr>
+                )}
+                </tbody>
+            </table>
+            </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex justify-center gap-2">
+                    <button 
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                    >
+                        ←
+                    </button>
+                    <span className="px-3 py-1 text-zinc-500">
+                        Стр. {page} из {totalPages}
+                    </span>
+                    <button 
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                    >
+                        →
+                    </button>
+                </div>
+            )}
         </div>
       </div>
     </div>

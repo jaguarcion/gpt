@@ -92,8 +92,22 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
 
 app.get('/api/keys', authenticateToken, async (req, res) => {
     try {
-        const keys = await KeyService.getAllKeys();
-        res.json(keys);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const status = req.query.status || 'all';
+
+        const result = await KeyService.getAllKeys(page, limit, status);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/keys/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await KeyService.deleteKey(id);
+        res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

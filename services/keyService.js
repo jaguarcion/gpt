@@ -57,9 +57,30 @@ export class KeyService {
         });
     }
 
-    static async getAllKeys() {
-        return prisma.key.findMany({
-            orderBy: { createdAt: 'desc' }
+    static async getAllKeys(page = 1, limit = 20, status = 'all') {
+        const skip = (page - 1) * limit;
+        const where = {};
+        
+        if (status !== 'all') {
+            where.status = status;
+        }
+
+        const [keys, total] = await Promise.all([
+            prisma.key.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' }
+            }),
+            prisma.key.count({ where })
+        ]);
+
+        return { keys, total, page, limit, totalPages: Math.ceil(total / limit) };
+    }
+
+    static async deleteKey(id) {
+        return prisma.key.delete({
+            where: { id: Number(id) }
         });
     }
 
