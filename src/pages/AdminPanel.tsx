@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken } from '../services/api';
 import { LogEntry } from '../components/LogConsole';
+import { Link } from 'react-router-dom';
 
 export function AdminPanel() {
   const [token, setToken] = useState('');
@@ -94,7 +95,15 @@ export function AdminPanel() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Admin Panel</h1>
+          <div className="flex items-center gap-6">
+            <h1 className="text-2xl font-bold">Admin Panel</h1>
+            <Link 
+                to="/admin/users" 
+                className="text-blue-400 hover:text-blue-300 font-medium text-sm px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20 transition-all hover:bg-blue-500/20"
+            >
+                Список пользователей →
+            </Link>
+          </div>
           <button 
             onClick={() => { setIsAuthenticated(false); localStorage.removeItem('adminToken'); }}
             className="text-sm text-zinc-400 hover:text-white"

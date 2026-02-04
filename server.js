@@ -109,6 +109,21 @@ app.get('/api/keys/stats', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/subscriptions', authenticateToken, async (req, res) => {
+    console.log('GET /api/subscriptions request received');
+    try {
+        const { telegramId } = req.query;
+        const subscriptions = telegramId 
+            ? await SubscriptionService.getSubscriptionsByTelegramId(telegramId)
+            : await SubscriptionService.getAllSubscriptions();
+        console.log(`Returning ${subscriptions.length} subscriptions`);
+        res.json(subscriptions);
+    } catch (e) {
+        console.error('Subscriptions Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // New Endpoint for Bot/Admin to create subscription and activate
 app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
     try {

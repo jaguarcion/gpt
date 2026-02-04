@@ -9,6 +9,46 @@ const ACTIVATE_API_URL = `http://localhost:${process.env.PORT || 3001}/api/activ
 const API_TOKEN = process.env.API_TOKEN;
 
 export class SubscriptionService {
+    static async getAllSubscriptions() {
+        return prisma.subscription.findMany({
+            orderBy: { createdAt: 'desc' },
+            include: {
+                keys: {
+                    select: { code: true, usedAt: true }
+                }
+            }
+        });
+    }
+
+    static async getSubscriptionsByTelegramId(telegramId) {
+        // Need to join with Session to find by telegramId
+        // Or find sessions first.
+        // Let's assume we can filter by email from sessions? No, relationship is loose.
+        // But we have SessionService. Let's find emails for this telegramId.
+        
+        // Since we don't have direct relation in schema (Session <-> Subscription is via email string),
+        // we do a 2-step query or raw query.
+        // Step 1: Get emails for this telegramId
+        const sessions = await prisma.session.findMany({
+            where: { telegramId: BigInt(telegramId) },
+            select: { email: true }
+        });
+        
+        const emails = sessions.map(s => s.email);
+        
+        if (emails.length === 0) return [];
+
+        return prisma.subscription.findMany({
+            where: { email: { in: emails } },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                keys: {
+                    select: { code: true, usedAt: true }
+                }
+            }
+        });
+    }
+
     static async createSubscription(email, type, telegramId, sessionJson) {
         // 1. Find available key
         const key = await KeyService.getAvailableKey();

@@ -20,6 +20,11 @@ export default defineConfig({
         rewrite: (path) => path
       },
       // 2. Local Backend (Admin API & Bot)
+      '/api/subscriptions': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,

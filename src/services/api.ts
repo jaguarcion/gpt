@@ -55,3 +55,8 @@ export const addKey = async (codes: string | string[]) => {
   const response = await adminApi.post('/keys', { code: codes });
   return response.data;
 };
+
+export const getSubscriptions = async () => {
+  const response = await adminApi.get('/subscriptions');
+  return response.data;
+};
