@@ -46,7 +46,7 @@ const userStates = new Map();
 
 bot.start((ctx) => {
     userStates.delete(ctx.from.id);
-    ctx.reply('Привет! Я бот для активации GPT CDK.\n\nПожалуйста, отправьте мне ваш *CDK-ключ* для начала.', { parse_mode: 'Markdown' });
+    ctx.reply('Пожалуйста, отправьте мне ваш *CDK-ключ* для начала.', { parse_mode: 'Markdown' });
 });
 
 bot.command('cancel', (ctx) => {
@@ -68,7 +68,7 @@ bot.on('text', async (ctx) => {
 
         userStates.set(userId, { step: 'WAITING_SESSION', cdk: text });
         return ctx.reply(
-            `Ключ принят: \`${text}\`\n\nТеперь отправьте мне *JSON сессии*.`, 
+            `Ключ принят: \`${text}\`\n\nТеперь отправьте *JSON сессии*.`, 
             { parse_mode: 'Markdown', ...Markup.inlineKeyboard([Markup.button.callback('Отмена', 'cancel')]) }
         );
     }
@@ -85,7 +85,7 @@ bot.on('text', async (ctx) => {
 
         const cdkKey = currentState.cdk;
         
-        ctx.reply('Данные получены. Начинаю активацию... Это может занять до 2 минут. ⏳');
+        ctx.reply('Данные получены. Активация может занять до 30 секунд. ⏳');
 
         try {
             // Call local API
