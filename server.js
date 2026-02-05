@@ -7,6 +7,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Add BigInt serialization support
+BigInt.prototype.toJSON = function() { return this.toString() }
+
 const app = express();
 app.set('trust proxy', 1); // Trust Nginx proxy
 app.use(helmet()); // Set secure HTTP headers
