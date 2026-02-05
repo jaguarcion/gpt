@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { getSubscriptions, setAuthToken, manualActivateSubscription } from '../services/api';
+import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
+import { EditUserModal } from '../components/EditUserModal';
 
 interface Key {
   id: number;
@@ -24,6 +25,8 @@ export function Users() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingUser, setEditingUser] = useState<Subscription | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -66,6 +69,17 @@ export function Users() {
       }
   };
 
+  const handleUpdateUser = async (data: any) => {
+      if (!editingUser) return;
+      try {
+          await updateSubscription(editingUser.id, data);
+          setEditingUser(null);
+          loadData();
+      } catch (e: any) {
+          alert('Ошибка обновления: ' + (e.response?.data?.error || e.message));
+      }
+  };
+
   const handleExportCSV = () => {
       if (subscriptions.length === 0) return;
 
@@ -100,6 +114,10 @@ export function Users() {
       document.body.removeChild(link);
   };
 
+  const filteredSubscriptions = subscriptions.filter(sub => 
+      sub.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -132,6 +150,20 @@ export function Users() {
             </div>
         )}
 
+        {/* Search Bar */}
+        <div className="relative">
+            <input 
+                type="text" 
+                placeholder="Поиск по Email..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
+            />
+            <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </div>
+
         {loading ? (
             <div className="text-center text-zinc-500 py-10">Загрузка...</div>
         ) : (
@@ -145,11 +177,11 @@ export function Users() {
                     <th className="px-6 py-3">Дата старта</th>
                     <th className="px-6 py-3">Дата окончания</th>
                     <th className="px-6 py-3">Ключи</th>
-                    <th className="px-6 py-3"></th>
+                    <th className="px-6 py-3 text-right">Действия</th>
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                {subscriptions.map((sub) => {
+                {filteredSubscriptions.map((sub) => {
                     const start = new Date(sub.startDate);
                     const monthsToAdd = sub.type === '3m' ? 3 : 1;
                     const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
@@ -158,7 +190,7 @@ export function Users() {
                     const displayStatus = endDate < now ? 'completed' : 'active';
 
                     return (
-                    <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors">
+                    <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors group">
                     <td className="px-6 py-4 font-medium text-white">{sub.email}</td>
                     <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded text-xs ${sub.type === '3m' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>
@@ -194,7 +226,14 @@ export function Users() {
                             {sub.keys.length === 0 && <span className="text-zinc-600">-</span>}
                         </div>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
+                        <button 
+                            onClick={() => setEditingUser(sub)}
+                            className="text-zinc-500 hover:text-blue-400 transition-colors p-1"
+                            title="Редактировать"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        </button>
                         {showExtend && (
                             <button 
                                 onClick={() => handleManualActivate(sub.id)}
@@ -207,9 +246,9 @@ export function Users() {
                     </tr>
                     );
                 })}
-                {subscriptions.length === 0 && (
+                {filteredSubscriptions.length === 0 && (
                     <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">Нет подписок</td>
+                    <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">Пользователи не найдены</td>
                     </tr>
                 )}
                 </tbody>
@@ -217,6 +256,15 @@ export function Users() {
             </div>
         )}
       </div>
+
+      {editingUser && (
+        <EditUserModal 
+            isOpen={true}
+            onClose={() => setEditingUser(null)}
+            onSave={handleUpdateUser}
+            user={editingUser}
+        />
+      )}
     </div>
   );
 }

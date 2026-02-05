@@ -39,4 +39,22 @@ export class SessionService {
         }
         return session;
     }
+
+    static async getActiveSessions() {
+        const now = new Date();
+        const sessions = await prisma.session.findMany({
+            where: {
+                expiresAt: {
+                    gt: now
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+        return sessions.map(s => ({
+            ...s,
+            isActive: true // Since we filtered by expiresAt > now
+        }));
+    }
 }

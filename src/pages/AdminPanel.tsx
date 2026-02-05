@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
-import { LogEntry } from '../components/LogConsole';
+import { LogConsole } from '../components/LogConsole';
+import { SessionList } from '../components/SessionList';
+import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { Link } from 'react-router-dom';
 
 export function AdminPanel() {
@@ -193,12 +195,15 @@ export function AdminPanel() {
                 Список пользователей →
             </Link>
           </div>
-          <button 
-            onClick={() => { setIsAuthenticated(false); localStorage.removeItem('adminToken'); }}
-            className="text-sm text-zinc-400 hover:text-white"
-          >
-            Выйти
-          </button>
+          <div className="flex items-center gap-4">
+            <ApiStatusWidget />
+            <button 
+              onClick={() => { setIsAuthenticated(false); localStorage.removeItem('adminToken'); }}
+              className="text-sm text-zinc-400 hover:text-white"
+            >
+              Выйти
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -209,6 +214,12 @@ export function AdminPanel() {
             <StatCard label="Использованные" value={stats.used} color="text-zinc-500" />
           </div>
         )}
+
+        {/* Activity Log & Sessions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <LogConsole />
+            <SessionList />
+        </div>
 
         {/* Add Key */}
         <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 space-y-4">

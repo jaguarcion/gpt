@@ -54,6 +54,11 @@ export const manualActivateSubscription = async (id: number) => {
   return response.data;
 };
 
+export const updateSubscription = async (id: number, data: { email?: string, type?: string, endDate?: string, status?: string }) => {
+  const response = await adminApi.put(`/subscriptions/${id}`, data);
+  return response.data;
+};
+
 export const deleteKey = async (id: number) => {
   const response = await adminApi.delete(`/keys/${id}`);
   return response.data;

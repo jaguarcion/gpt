@@ -64,9 +64,18 @@ const authenticateToken = (req, res, next) => {
 
 import { KeyService } from './services/keyService.js';
 import { SessionService } from './services/sessionService.js';
-import { SubscriptionService } from './services/subscriptionService.js';
+import { LogService } from './services/logService.js';
 
 // ... (existing imports and config)
+
+app.get('/api/logs', authenticateToken, async (req, res) => {
+    try {
+        const logs = await LogService.getLogs(50);
+        res.json(logs);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 app.post('/api/keys', authenticateToken, async (req, res) => {
     try {
@@ -75,12 +84,14 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
         // Handle bulk upload
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
+            await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`);
             return res.json({ success: true, count: result.count });
         }
 
         // Handle single upload (legacy or simple)
         if (code) {
             const key = await KeyService.addKey(code);
+            await LogService.log('KEY_ADDED', `Added single key: ${code}`);
             return res.json(key);
         }
         
@@ -138,6 +149,41 @@ app.get('/api/subscriptions', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/sessions/active', authenticateToken, async (req, res) => {
+    try {
+        const sessions = await SessionService.getActiveSessions();
+        res.json(sessions);
+    } catch (e) {
+        console.error('Sessions Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/status', authenticateToken, async (req, res) => {
+    try {
+        const start = Date.now();
+        const response = await axios.get(`${BASE_URL}/api/stocks/public/status`, {
+            timeout: 5000,
+            headers: { 'x-product-id': 'chatgpt' } // Optional header, just to mimic client
+        });
+        const duration = Date.now() - start;
+        
+        // Assuming status 200 means ok
+        res.json({ 
+            online: true, 
+            latency: duration,
+            message: 'API Online'
+        });
+    } catch (e) {
+        console.error('API Status Check Error:', e.message);
+        res.json({ 
+            online: false, 
+            latency: 0,
+            message: e.message || 'API Unreachable'
+        });
+    }
+});
+
 // New Endpoint for Bot/Admin to create subscription and activate
 app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
     try {
@@ -169,6 +215,21 @@ app.post('/api/subscriptions/:id/activate', authenticateToken, async (req, res) 
         res.json(result);
     } catch (e) {
         console.error('Manual Activation Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/subscriptions/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { email, type, endDate, status } = req.body;
+        const result = await SubscriptionService.updateSubscription(id, { email, type, endDate, status });
+        
+        await LogService.log('USER_EDIT', `Updated user #${id}: ${JSON.stringify(req.body)}`);
+        
+        res.json(result);
+    } catch (e) {
+        console.error('Update User Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
