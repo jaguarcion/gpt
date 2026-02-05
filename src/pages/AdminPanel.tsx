@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
-import { ActivityLog } from '../components/ActivityLog';
-import { SessionList } from '../components/SessionList';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { Link } from 'react-router-dom';
 
@@ -196,6 +194,12 @@ export function AdminPanel() {
             </Link>
           </div>
           <div className="flex items-center gap-4">
+            <Link 
+                to="/admin/logs" 
+                className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
+            >
+                Activity Logs
+            </Link>
             <ApiStatusWidget />
             <button 
               onClick={() => { setIsAuthenticated(false); localStorage.removeItem('adminToken'); }}
@@ -214,12 +218,6 @@ export function AdminPanel() {
             <StatCard label="Использованные" value={stats.used} color="text-zinc-500" />
           </div>
         )}
-
-        {/* Activity Log & Sessions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ActivityLog />
-            <SessionList />
-        </div>
 
         {/* Add Key */}
         <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 space-y-4">

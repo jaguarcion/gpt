@@ -166,13 +166,13 @@ app.get('/api/sessions/active', authenticateToken, async (req, res) => {
 app.get('/api/status', authenticateToken, async (req, res) => {
     try {
         const start = Date.now();
-        const response = await axios.get(`${BASE_URL}/api/stocks/public/status`, {
+        // Check main page instead of specific API endpoint to avoid 404
+        const response = await axios.get(`${BASE_URL}`, {
             timeout: 5000,
-            headers: { 'x-product-id': 'chatgpt' } // Optional header, just to mimic client
+            headers: { 'x-product-id': 'chatgpt' } 
         });
         const duration = Date.now() - start;
         
-        // Assuming status 200 means ok
         res.json({ 
             online: true, 
             latency: duration,

@@ -1,0 +1,100 @@
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+import { ApiStatusWidget } from '../components/ApiStatusWidget';
+
+export interface LogEntry {
+    id: number;
+    action: string;
+    details: string;
+    email: string | null;
+    createdAt: string;
+}
+
+export function ActivityLogs() {
+    const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        loadLogs();
+        // Poll every 10 seconds
+        const interval = setInterval(loadLogs, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const loadLogs = async () => {
+        try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) return;
+
+            const response = await axios.get('/api/logs', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setLogs(response.data);
+        } catch (e) {
+            console.error('Failed to load logs:', e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+            <div className="max-w-6xl mx-auto space-y-8">
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-6">
+                        <Link 
+                            to="/admin" 
+                            className="text-zinc-400 hover:text-zinc-200 transition-colors"
+                        >
+                            ← Назад
+                        </Link>
+                        <h1 className="text-2xl font-bold">Activity Logs</h1>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <ApiStatusWidget />
+                    </div>
+                </div>
+
+                <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden min-h-[500px] flex flex-col">
+                    <div className="p-4 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center">
+                        <h3 className="font-medium text-zinc-100">Последние события</h3>
+                        <span className="text-xs text-zinc-500">Auto-updates every 10s</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-sm">
+                        {loading && logs.length === 0 ? (
+                            <div className="text-zinc-500 text-center py-4">Loading logs...</div>
+                        ) : logs.length === 0 ? (
+                            <div className="text-zinc-500 text-center py-4">No activity recorded yet.</div>
+                        ) : (
+                            logs.map(log => (
+                                <div key={log.id} className="flex gap-4 text-zinc-400 hover:bg-zinc-800/30 p-2 rounded transition-colors border-b border-zinc-800/30 last:border-0">
+                                    <span className="text-zinc-600 whitespace-nowrap w-24">
+                                        {new Date(log.createdAt).toLocaleTimeString()}
+                                        <div className="text-[10px] opacity-60">{new Date(log.createdAt).toLocaleDateString()}</div>
+                                    </span>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`font-bold px-2 py-0.5 rounded text-xs ${
+                                                log.action === 'ERROR' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                log.action.includes('ACTIVATION') ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                                log.action === 'KEY_ADDED' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                'bg-zinc-800 text-zinc-300'
+                                            }`}>
+                                                {log.action}
+                                            </span>
+                                            {log.email && <span className="text-zinc-500 text-xs">User: {log.email}</span>}
+                                        </div>
+                                        <span className="text-zinc-300 break-all">
+                                            {log.details}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
