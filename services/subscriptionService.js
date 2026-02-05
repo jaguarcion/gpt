@@ -126,11 +126,11 @@ export class SubscriptionService {
                 data: { activationsCount: { increment: 1 } }
             });
             
-            // If type is 1m, mark completed
+            // If type is 1m, mark active
             if (type === '1m') {
                 await prisma.subscription.update({
                     where: { id: subscription.id },
-                    data: { status: 'completed', nextActivationDate: null }
+                    data: { status: 'active', nextActivationDate: null }
                 });
             }
             
@@ -242,7 +242,31 @@ export class SubscriptionService {
 
     static async processScheduledActivations() {
         const now = new Date();
-        // Find active subscriptions where nextActivationDate is past due
+        
+        // 1. Mark expired subscriptions as completed
+        // For 1m subs: if startDate + 1 month < now -> completed
+        // For 3m subs: if activationsCount >= 3 AND last activation date + 1 month < now -> completed
+        // To simplify: we can calculate endDate for all active subs and check against now
+        
+        const activeSubs = await prisma.subscription.findMany({
+            where: { status: 'active' }
+        });
+
+        for (const sub of activeSubs) {
+            const start = new Date(sub.startDate);
+            const monthsToAdd = sub.type === '3m' ? 3 : 1;
+            const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
+            
+            if (endDate < now) {
+                console.log(`[Scheduler] Marking subscription #${sub.id} (${sub.email}) as completed (expired).`);
+                await prisma.subscription.update({
+                    where: { id: sub.id },
+                    data: { status: 'completed' }
+                });
+            }
+        }
+
+        // 2. Find active subscriptions where nextActivationDate is past due
         const dueSubscriptions = await prisma.subscription.findMany({
             where: {
                 status: 'active',

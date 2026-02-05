@@ -343,6 +343,16 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
     }
 });
 
+import cron from 'node-cron';
+
+// ... (existing imports)
+
+// Schedule: Run every hour
+cron.schedule('0 * * * *', async () => {
+    console.log('[Cron] Running scheduled activations check...');
+    await SubscriptionService.processScheduledActivations();
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Endpoint: POST http://localhost:${PORT}/api/activate-key`);

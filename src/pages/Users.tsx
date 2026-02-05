@@ -228,7 +228,7 @@ export function Users() {
                     </td>
                     <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
                         <button 
-                            onClick={() => setEditingUser(sub)}
+                            onClick={() => setEditingUser({ ...sub, status: displayStatus })}
                             className="text-zinc-500 hover:text-blue-400 transition-colors p-1"
                             title="Редактировать"
                         >
