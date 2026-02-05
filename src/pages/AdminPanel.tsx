@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
-import { LogConsole } from '../components/LogConsole';
+import { ActivityLog } from '../components/ActivityLog';
 import { SessionList } from '../components/SessionList';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { Link } from 'react-router-dom';
@@ -217,7 +217,7 @@ export function AdminPanel() {
 
         {/* Activity Log & Sessions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <LogConsole />
+            <ActivityLog />
             <SessionList />
         </div>
 
