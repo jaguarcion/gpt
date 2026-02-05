@@ -1,101 +1,10 @@
+import prisma from './db.js';
+import axios from 'axios';
+import dotenv from 'dotenv';
+import { Telegraf } from 'telegraf';
+import { KeyService } from './keyService.js';
+import { SessionService } from './sessionService.js';
 import { LogService } from './logService.js';
-
-// ...
-
-        if (activationResult.success) {
-            // Mark key as used
-            await KeyService.markKeyAsUsed(key.id, email, subscription.id);
-            
-            // Update subscription count
-            await prisma.subscription.update({
-                where: { id: subscription.id },
-                data: { activationsCount: { increment: 1 } }
-            });
-            
-            // If type is 1m, mark completed
-            if (type === '1m') {
-                await prisma.subscription.update({
-                    where: { id: subscription.id },
-                    data: { status: 'completed', nextActivationDate: null }
-                });
-            }
-            
-            await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email);
-
-        } else {
-             // If activation failed, maybe we shouldn't mark key as used?
-             // Or maybe we should? Depends on failure reason. 
-             // For now, let's NOT mark as used so it can be retried, but throw error
-             await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email);
-             throw new Error(`Ошибка активации: ${activationResult.message}`);
-        }
-
-        return { subscription, activationResult };
-    }
-
-// ...
-
-    static async manualActivate(subscriptionId) {
-        // ... (existing code)
-        
-        // Activate
-        const result = await this.activateKeyForSubscription(subscription.id, key.code, session.sessionJson);
-
-        if (result.success) {
-            await KeyService.markKeyAsUsed(key.id, subscription.email, subscription.id);
-            
-            const newCount = subscription.activationsCount + 1;
-            const isFinished = newCount >= 3;
-            
-            await prisma.subscription.update({
-                where: { id: subscription.id },
-                data: { 
-                    activationsCount: newCount,
-                    status: isFinished ? 'completed' : 'active',
-                    nextActivationDate: isFinished ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-                }
-            });
-
-            // notifyAdmins(`🛠 *Ручная активация*\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
-            await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/3`, subscription.email);
-            return { success: true, message: 'Успешно активировано', round: newCount };
-        } else {
-            await LogService.log('ERROR', `Manual activation failed for #${subscription.id}: ${result.message}`, subscription.email);
-            throw new Error(result.message || 'Ошибка активации');
-        }
-    }
-    
-    static async processScheduledActivations() {
-        // ...
-        
-                // Activate
-                const result = await this.activateKeyForSubscription(sub.id, key.code, session.sessionJson);
-
-                if (result.success) {
-                    await KeyService.markKeyAsUsed(key.id, sub.email, sub.id);
-                    
-                    const newCount = sub.activationsCount + 1;
-                    const isFinished = newCount >= 3;
-                    
-                    await prisma.subscription.update({
-                        where: { id: sub.id },
-                        data: { 
-                            activationsCount: newCount,
-                            status: isFinished ? 'completed' : 'active',
-                            nextActivationDate: isFinished ? null : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-                        }
-                    });
-                    console.log(`[Scheduler] Successfully activated round ${newCount} for ${sub.email}`);
-                    notifyAdmins(`🔄 *Успешное продление*\nEmail: \`${sub.email}\`\nРаунд: ${newCount}/3\nID Подписки: ${sub.id}`);
-                    await LogService.log('RENEWAL', `Auto-renewed subscription #${sub.id}, round ${newCount}/3`, sub.email);
-                } else {
-                    console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
-                    notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
-                    await LogService.log('ERROR', `Auto-renewal failed for #${sub.id}: ${result.message}`, sub.email);
-                }
-                
-         // ...
-    }
 
 dotenv.config();
 
@@ -136,12 +45,6 @@ export class SubscriptionService {
 
     static async getSubscriptionsByTelegramId(telegramId) {
         // Need to join with Session to find by telegramId
-        // Or find sessions first.
-        // Let's assume we can filter by email from sessions? No, relationship is loose.
-        // But we have SessionService. Let's find emails for this telegramId.
-        
-        // Since we don't have direct relation in schema (Session <-> Subscription is via email string),
-        // we do a 2-step query or raw query.
         // Step 1: Get emails for this telegramId
         const sessions = await prisma.session.findMany({
             where: { telegramId: BigInt(telegramId) },
@@ -188,7 +91,6 @@ export class SubscriptionService {
                      nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
                  }
              });
-             // notifyAdmins(`♻️ *Повторная подписка*\nEmail: \`${email}\`\nТип: ${type}\nTelegram ID: ${telegramId}`);
         } else {
             // 2. Create Subscription Record
             subscription = await prisma.subscription.create({
@@ -197,15 +99,12 @@ export class SubscriptionService {
                     type,
                     status: 'active',
                     activationsCount: 0,
-                    nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null // Next activation in 30 days if 3m
+                    nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
                 }
             });
-            // Notify Admins about new subscription
-            // notifyAdmins(`🆕 *Новая подписка*\nEmail: \`${email}\`\nТип: ${type}\nTelegram ID: ${telegramId}`);
         }
 
         // 3. Save Session (upsert)
-        // We need session info for future activations
         // Extract expiresAt from sessionJson if possible, or default
         let expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // Default 3 months
         if (sessionJson.expires) {
@@ -234,10 +133,12 @@ export class SubscriptionService {
                     data: { status: 'completed', nextActivationDate: null }
                 });
             }
+            
+            await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email);
+
         } else {
-             // If activation failed, maybe we shouldn't mark key as used?
-             // Or maybe we should? Depends on failure reason. 
-             // For now, let's NOT mark as used so it can be retried, but throw error
+             // If activation failed
+             await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email);
              throw new Error(`Ошибка активации: ${activationResult.message}`);
         }
 
@@ -306,9 +207,11 @@ export class SubscriptionService {
                 }
             });
 
-            notifyAdmins(`🛠 *Ручная активация*\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
+            // notifyAdmins(`🛠 *Ручная активация*\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
+            await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/3`, subscription.email);
             return { success: true, message: 'Успешно активировано', round: newCount };
         } else {
+            await LogService.log('ERROR', `Manual activation failed for #${subscription.id}: ${result.message}`, subscription.email);
             throw new Error(result.message || 'Ошибка активации');
         }
     }
@@ -322,39 +225,19 @@ export class SubscriptionService {
         if (type) updateData.type = type;
         if (status) updateData.status = status;
         
-        // Calculate nextActivationDate based on endDate if provided
-        // Logic: if endDate is in future, nextActivationDate could be set to that date if we want auto-renew?
-        // Or simply update the record fields directly.
-        // For simplicity, we just update what's passed, but we might need to handle logic for dates.
-        
-        /* 
-           If user manually sets End Date, we might need to adjust logic.
-           But usually "End Date" is calculated from startDate + type.
-           If we want to extend, we usually change startDate or just 'status'.
-           Let's assume we update the fields directly for now.
-        */
-       
-       // If endDate is passed, we might want to update startDate implicitly or nextActivationDate?
-       // Let's stick to simple field updates for now.
-       // However, schema doesn't have 'endDate', it has 'startDate' and 'type'.
-       // 'endDate' is calculated. So if admin changes 'endDate', we should adjust 'startDate'.
-       
-       if (endDate) {
+        if (endDate) {
            const end = new Date(endDate);
            const months = type === '3m' ? 3 : 1;
            // New start date = end date - duration
            const newStart = new Date(end);
            newStart.setMonth(newStart.getMonth() - months);
            updateData.startDate = newStart;
-           
-           // If type is 3m, nextActivationDate should also be adjusted? 
-           // This is complex. Let's just update fields if they exist in schema.
-       }
+        }
 
-       return prisma.subscription.update({
-           where: { id: parseInt(id) },
-           data: updateData
-       });
+        return prisma.subscription.update({
+            where: { id: parseInt(id) },
+            data: updateData
+        });
     }
 
     static async processScheduledActivations() {
@@ -416,9 +299,11 @@ export class SubscriptionService {
                     });
                     console.log(`[Scheduler] Successfully activated round ${newCount} for ${sub.email}`);
                     notifyAdmins(`🔄 *Успешное продление*\nEmail: \`${sub.email}\`\nРаунд: ${newCount}/3\nID Подписки: ${sub.id}`);
+                    await LogService.log('RENEWAL', `Auto-renewed subscription #${sub.id}, round ${newCount}/3`, sub.email);
                 } else {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
                     notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
+                    await LogService.log('ERROR', `Auto-renewal failed for #${sub.id}: ${result.message}`, sub.email);
                 }
 
             } catch (e) {
