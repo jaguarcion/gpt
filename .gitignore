@@ -32,3 +32,9 @@ dist-ssr
 .trae/
 
 /generated/prisma
+
+# Database
+*.db
+*.db-journal
+prisma/*.db
+prisma/*.db-journal
