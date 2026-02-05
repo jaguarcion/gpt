@@ -20,7 +20,7 @@ export function ApiStatusWidget() {
     const checkStatus = async () => {
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await axios.get('http://localhost:3001/api/status', {
+            const response = await axios.get('/api/status', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setStatus(response.data);

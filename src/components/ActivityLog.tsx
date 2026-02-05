@@ -25,7 +25,7 @@ export function ActivityLog() {
             const token = localStorage.getItem('adminToken');
             if (!token) return;
 
-            const response = await axios.get('http://localhost:3001/api/logs', {
+            const response = await axios.get('/api/logs', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setLogs(response.data);

@@ -20,7 +20,7 @@ export function SessionList() {
     const loadSessions = async () => {
         try {
             const token = localStorage.getItem('adminToken');
-            const response = await axios.get('http://localhost:3001/api/sessions/active', {
+            const response = await axios.get('/api/sessions/active', {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setSessions(response.data);
