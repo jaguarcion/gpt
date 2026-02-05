@@ -65,6 +65,7 @@ const authenticateToken = (req, res, next) => {
 import { KeyService } from './services/keyService.js';
 import { SessionService } from './services/sessionService.js';
 import { LogService } from './services/logService.js';
+import { SubscriptionService } from './services/subscriptionService.js';
 
 // ... (existing imports and config)
 
