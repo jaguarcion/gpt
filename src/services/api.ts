@@ -78,9 +78,9 @@ export const addKey = async (codes: string | string[]) => {
   return response.data;
 };
 
-export const getSubscriptions = async (page = 1, limit = 20, search = '') => {
+export const getSubscriptions = async (page = 1, limit = 20, search = '', filters = {}) => {
   const response = await adminApi.get('/subscriptions', {
-      params: { page, limit, search }
+      params: { page, limit, search, ...filters }
   });
   return response.data;
 };
@@ -88,4 +88,24 @@ export const getSubscriptions = async (page = 1, limit = 20, search = '') => {
 export const getDailyStats = async () => {
     const response = await adminApi.get('/stats/daily');
     return response.data;
+};
+
+// Backups API
+export const getBackups = async () => {
+    const response = await adminApi.get('/backups');
+    return response.data;
+};
+
+export const createBackup = async () => {
+    const response = await adminApi.post('/backups');
+    return response.data;
+};
+
+export const deleteBackup = async (filename: string) => {
+    const response = await adminApi.delete(`/backups/${filename}`);
+    return response.data;
+};
+
+export const downloadBackupUrl = (filename: string) => {
+    return `/api/backups/${filename}`;
 };

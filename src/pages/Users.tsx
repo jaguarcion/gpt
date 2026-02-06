@@ -28,6 +28,11 @@ export function Users() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+      status: 'all',
+      type: 'all',
+      expiring: false
+  });
   const [editingUser, setEditingUser] = useState<Subscription | null>(null);
   
   // Pagination
@@ -50,12 +55,12 @@ export function Users() {
   // Reload when page or search changes
   useEffect(() => {
       loadData();
-  }, [page, searchTerm]);
+  }, [page, searchTerm, filters]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getSubscriptions(page, limit, searchTerm);
+      const data = await getSubscriptions(page, limit, searchTerm, filters);
       setSubscriptions(data.subscriptions);
       setTotalPages(data.totalPages);
     } catch (e: any) {
@@ -205,18 +210,54 @@ export function Users() {
             </div>
         )}
 
-        {/* Search Bar */}
-        <div className="relative">
-            <input 
-                type="text" 
-                placeholder="Поиск по Email..." 
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                className="w-full bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-xl px-4 py-3 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
-            />
-            <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+        {/* Search and Filters */}
+        <div className="space-y-4">
+            <div className="relative">
+                <input 
+                    type="text" 
+                    placeholder="Поиск по Email..." 
+                    value={searchTerm}
+                    onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                    className="w-full bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-xl px-4 py-3 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
+                />
+                <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+                <select 
+                    value={filters.status}
+                    onChange={(e) => { setFilters({...filters, status: e.target.value}); setPage(1); }}
+                    className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-blue-500"
+                >
+                    <option value="all">Все статусы</option>
+                    <option value="active">Активные</option>
+                    <option value="completed">Завершенные</option>
+                    <option value="expired">Истекшие</option>
+                </select>
+
+                <select 
+                    value={filters.type}
+                    onChange={(e) => { setFilters({...filters, type: e.target.value}); setPage(1); }}
+                    className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-blue-500"
+                >
+                    <option value="all">Все типы</option>
+                    <option value="1m">1 Месяц</option>
+                    <option value="2m">2 Месяца</option>
+                    <option value="3m">3 Месяца</option>
+                </select>
+
+                <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-lg px-3 py-2 select-none">
+                    <input 
+                        type="checkbox" 
+                        checked={filters.expiring}
+                        onChange={(e) => { setFilters({...filters, expiring: e.target.checked}); setPage(1); }}
+                        className="rounded border-zinc-300 dark:border-zinc-700 text-blue-600 focus:ring-0"
+                    />
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">Истекают скоро (3 дня)</span>
+                </label>
+            </div>
         </div>
 
         {loading ? (

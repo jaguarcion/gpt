@@ -75,6 +75,9 @@ export function ActivityLogs() {
                                 <option value="ADMIN_LOGIN">Admin Login</option>
                                 <option value="MANUAL_ACTIVATION">Manual Activation</option>
                                 <option value="USER_EDIT">User Edit</option>
+                                <option value="BACKUP">Backup</option>
+                                <option value="USER_DELETE">User Delete</option>
+                                <option value="ADMIN_ACTIONS">Все действия админа</option>
                             </select>
 
                             <input 

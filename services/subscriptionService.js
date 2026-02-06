@@ -106,10 +106,62 @@ export class SubscriptionService {
         };
     }
 
-    static async getAllSubscriptions(page = 1, limit = 20, search = '') {
-        const where = search ? {
-            email: { contains: search }
-        } : {};
+    static async getAllSubscriptions(page = 1, limit = 20, search = '', filters = {}) {
+        const where = {};
+        
+        if (search) {
+            where.email = { contains: search };
+        }
+        
+        if (filters.status && filters.status !== 'all') {
+            where.status = filters.status;
+        }
+        
+        if (filters.type && filters.type !== 'all') {
+            where.type = filters.type;
+        }
+
+        // Handle "expiring soon" filter (e.g. within 3 days)
+        // This is complex because endDate is calculated dynamically in code, not stored in DB directly as 'endDate'
+        // But we can approximate using startDate + type duration
+        // Or if we want to be precise, we need to filter in memory (bad for pagination) or use raw query.
+        // For simplicity/performance with sqlite/prisma:
+        // Let's rely on client-side or basic status filtering for now, 
+        // OR we can add a 'expiringSoon' flag that checks if startDate is older than (Duration - 3 days).
+        
+        // Let's implement expiring logic:
+        if (filters.expiring) {
+             const now = new Date();
+             const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+             
+             // Logic:
+             // End Date = StartDate + Months
+             // We want: EndDate <= threeDaysFromNow AND EndDate >= now
+             // So: StartDate <= threeDaysFromNow - Months AND StartDate >= now - Months
+             
+             // Since 'Months' varies by type, we might need OR conditions
+             
+             const getDateRange = (months) => {
+                 const targetEnd = new Date(threeDaysFromNow);
+                 targetEnd.setMonth(targetEnd.getMonth() - months);
+                 
+                 const targetStart = new Date(now);
+                 targetStart.setMonth(targetStart.getMonth() - months);
+                 
+                 return { lte: targetEnd, gte: targetStart };
+             };
+             
+             where.AND = [
+                 { status: 'active' },
+                 {
+                     OR: [
+                        { type: '1m', startDate: getDateRange(1) },
+                        { type: '2m', startDate: getDateRange(2) },
+                        { type: '3m', startDate: getDateRange(3) }
+                     ]
+                 }
+             ];
+        }
 
         const [subscriptions, total] = await Promise.all([
             prisma.subscription.findMany({
@@ -172,12 +224,20 @@ export class SubscriptionService {
 
         if (subscription) {
              // Update existing subscription
+             // IMPORTANT: Check if we are creating a new one because the previous one was completed/expired?
+             // Or is this a "re-subscribe" action?
+             // If status is 'active', we probably shouldn't be here unless user forces it.
+             // But let's assume this is a fresh start or upgrade.
+             
+             // If we are reactivating a user, we should reset their state properly.
+             
              subscription = await prisma.subscription.update({
                  where: { id: subscription.id },
                  data: {
                      type,
                      status: 'active',
                      activationsCount: 0, // Reset for new period
+                     lifetimeActivations: subscription.lifetimeActivations, // Keep lifetime stats
                      startDate: new Date(),
                      nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
                  }
@@ -212,10 +272,12 @@ export class SubscriptionService {
             await KeyService.markKeyAsUsed(key.id, email, subscription.id);
             
             // Update subscription count
+            // We need to increment lifetimeActivations, and activationsCount (which is 0 now, so becomes 1)
+            
             await prisma.subscription.update({
                 where: { id: subscription.id },
                 data: { 
-                    activationsCount: { increment: 1 },
+                    activationsCount: 1, // Explicitly set to 1 for first activation
                     lifetimeActivations: { increment: 1 }
                 }
             });

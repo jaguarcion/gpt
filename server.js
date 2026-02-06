@@ -72,6 +72,102 @@ import { SubscriptionService } from './services/subscriptionService.js';
 
 // ... (existing imports and config)
 
+import fs from 'fs';
+import path from 'path';
+
+// ... (existing endpoints)
+
+app.get('/api/backups', authenticateToken, async (req, res) => {
+    try {
+        const backupDir = path.join(process.cwd(), 'backups');
+        if (!fs.existsSync(backupDir)) {
+            return res.json([]);
+        }
+        
+        const files = fs.readdirSync(backupDir)
+            .filter(file => file.endsWith('.db'))
+            .map(file => {
+                const stats = fs.statSync(path.join(backupDir, file));
+                return {
+                    name: file,
+                    size: stats.size,
+                    created: stats.mtime
+                };
+            })
+            .sort((a, b) => new Date(b.created) - new Date(a.created));
+            
+        res.json(files);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/backups', authenticateToken, async (req, res) => {
+    try {
+        // Trigger manual backup via existing logic in backup_service
+        // Since backup_service runs on import, we can't easily call its internal function directly without refactoring.
+        // For now, let's implement a simple manual copy here or refactor backup_service to export the function.
+        // Let's do a simple copy here to avoid complex refactoring in this step.
+        
+        const backupDir = path.join(process.cwd(), 'backups');
+        if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir);
+        
+        const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupName = `manual_backup_${timestamp}.db`;
+        
+        fs.copyFileSync(dbPath, path.join(backupDir, backupName));
+        
+        await LogService.log('BACKUP', `Manual backup created: ${backupName}`);
+        
+        res.json({ success: true, name: backupName });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/backups/:filename', authenticateToken, async (req, res) => {
+    try {
+        const { filename } = req.params;
+        const backupDir = path.join(process.cwd(), 'backups');
+        const filePath = path.join(backupDir, filename);
+        
+        // Security check: ensure no directory traversal
+        if (!filePath.startsWith(backupDir)) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        
+        res.download(filePath);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/backups/:filename', authenticateToken, async (req, res) => {
+    try {
+        const { filename } = req.params;
+        const backupDir = path.join(process.cwd(), 'backups');
+        const filePath = path.join(backupDir, filename);
+        
+        if (!filePath.startsWith(backupDir)) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            await LogService.log('BACKUP', `Backup deleted: ${filename}`);
+        }
+        
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/logs', authenticateToken, async (req, res) => {
     try {
         const { limit, type, search } = req.query;
@@ -151,7 +247,7 @@ app.get('/api/stats/daily', authenticateToken, async (req, res) => {
 
 app.get('/api/subscriptions', authenticateToken, async (req, res) => {
     try {
-        const { telegramId, page, limit, search } = req.query;
+        const { telegramId, page, limit, search, status, type, expiring } = req.query;
         
         if (telegramId) {
              const subscriptions = await SubscriptionService.getSubscriptionsByTelegramId(telegramId);
@@ -161,7 +257,12 @@ app.get('/api/subscriptions', authenticateToken, async (req, res) => {
         const result = await SubscriptionService.getAllSubscriptions(
             parseInt(page) || 1, 
             parseInt(limit) || 20, 
-            search || ''
+            search || '',
+            { 
+                status: status || 'all',
+                type: type || 'all',
+                expiring: expiring === 'true'
+            }
         );
         res.json(result);
     } catch (e) {

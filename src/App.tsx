@@ -5,6 +5,7 @@ import { AdminPanel } from './pages/AdminPanel';
 import { Users } from './pages/Users';
 import { ActivityLogs } from './pages/ActivityLogs';
 import { Statistics } from './pages/Statistics';
+import { Backups } from './pages/Backups';
 import { ThemeProvider } from './components/ThemeProvider';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <Route path="/admin/users" element={<Users />} />
           <Route path="/admin/logs" element={<ActivityLogs />} />
           <Route path="/admin/stats" element={<Statistics />} />
+          <Route path="/admin/backups" element={<Backups />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

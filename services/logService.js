@@ -23,7 +23,11 @@ export class LogService {
         const where = {};
         
         if (type) {
-            where.action = type;
+            if (type === 'ADMIN_ACTIONS') {
+                where.action = { in: ['ADMIN_LOGIN', 'USER_EDIT', 'KEY_ADDED', 'MANUAL_ACTIVATION', 'BACKUP', 'USER_DELETE'] };
+            } else {
+                where.action = type;
+            }
         }
         
         if (search) {
