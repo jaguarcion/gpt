@@ -69,6 +69,7 @@ import { KeyService } from './services/keyService.js';
 import { SessionService } from './services/sessionService.js';
 import { LogService } from './services/logService.js';
 import { SubscriptionService } from './services/subscriptionService.js';
+import { FinanceService } from './services/financeService.js';
 
 // ... (existing imports and config)
 
@@ -145,6 +146,27 @@ app.get('/api/stats/daily', authenticateToken, async (req, res) => {
         res.json(stats);
     } catch (e) {
         console.error('Stats Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/finance/stats', authenticateToken, async (req, res) => {
+    try {
+        const stats = await FinanceService.getFinancialStats();
+        res.json(stats);
+    } catch (e) {
+        console.error('Finance Stats Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/finance/config', authenticateToken, async (req, res) => {
+    try {
+        const { type, price, cost } = req.body;
+        const result = await FinanceService.updatePlanConfig(type, price, cost);
+        res.json(result);
+    } catch (e) {
+        console.error('Update Finance Config Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

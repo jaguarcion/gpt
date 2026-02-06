@@ -59,6 +59,13 @@ model Subscription {
   @@map("subscriptions")
 }
 
+model PlanConfig {
+  id        Int      @id @default(autoincrement())
+  type      String   @unique // '1m', '2m', '3m'
+  price     Int      @default(0) // Selling price
+  cost      Int      @default(0) // Cost price
+}
+
 // Activity Log Model
 model ActivityLog {
   id        Int      @id @default(autoincrement())
