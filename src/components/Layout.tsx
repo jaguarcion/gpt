@@ -18,6 +18,7 @@ export function Layout({ children }: LayoutProps) {
         { path: '/admin/logs', label: 'Логи' },
         { path: '/admin/stats', label: 'Статистика' },
         { path: '/admin/backups', label: 'Бэкапы' },
+        { path: '/admin/inventory', label: 'Склад' },
     ];
 
     return (

@@ -235,6 +235,16 @@ app.get('/api/keys/stats', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/inventory/stats', authenticateToken, async (req, res) => {
+    try {
+        const stats = await KeyService.getInventoryStats();
+        res.json(stats);
+    } catch (e) {
+        console.error('Inventory Stats Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/stats/daily', authenticateToken, async (req, res) => {
     try {
         const stats = await SubscriptionService.getStats();

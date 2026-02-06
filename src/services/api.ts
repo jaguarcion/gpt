@@ -109,3 +109,8 @@ export const deleteBackup = async (filename: string) => {
 export const downloadBackupUrl = (filename: string) => {
     return `/api/backups/${filename}`;
 };
+
+export const getInventoryStats = async () => {
+    const response = await adminApi.get('/inventory/stats');
+    return response.data;
+};
