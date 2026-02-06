@@ -3,6 +3,7 @@ import { getDailyStats, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 
 export function Statistics() {
     const [stats, setStats] = useState<any>(null);
