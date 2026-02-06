@@ -31,6 +31,9 @@ const notifyAdmins = async (message) => {
 const ACTIVATE_API_URL = `http://localhost:${process.env.PORT || 3001}/api/activate-key`;
 const API_TOKEN = process.env.API_TOKEN;
 
+// In-memory lock to prevent race conditions for same user
+const processingLocks = new Set();
+
 export class SubscriptionService {
     static async getStats() {
         const total = await prisma.subscription.count();
@@ -210,95 +213,123 @@ export class SubscriptionService {
     }
 
     static async createSubscription(email, type, telegramId, sessionJson) {
-        // 1. Find available key
-        const key = await KeyService.getAvailableKey();
-
-        if (!key) {
-            throw new Error(`Нет доступных ключей`);
+        if (processingLocks.has(email)) {
+            console.warn(`[Lock] Duplicate request blocked for ${email}`);
+            throw new Error('Запрос уже обрабатывается. Пожалуйста, подождите.');
         }
 
-        // Check if subscription exists
-        let subscription = await prisma.subscription.findFirst({
-            where: { email }
-        });
+        processingLocks.add(email);
 
-        if (subscription) {
-             // Update existing subscription
-             // IMPORTANT: Check if we are creating a new one because the previous one was completed/expired?
-             // Or is this a "re-subscribe" action?
-             // If status is 'active', we probably shouldn't be here unless user forces it.
-             // But let's assume this is a fresh start or upgrade.
-             
-             // If we are reactivating a user, we should reset their state properly.
-             
-             subscription = await prisma.subscription.update({
-                 where: { id: subscription.id },
-                 data: {
-                     type,
-                     status: 'active',
-                     activationsCount: 0, // Reset for new period
-                     lifetimeActivations: subscription.lifetimeActivations, // Keep lifetime stats
-                     startDate: new Date(),
-                     nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
-                 }
-             });
-        } else {
-            // 2. Create Subscription Record
-            subscription = await prisma.subscription.create({
-                data: {
-                    email,
-                    type,
-                    status: 'active',
-                    activationsCount: 0,
-                    nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
-                }
+        try {
+            // 0. Double-check: verify if we recently activated this user (within 2 minutes)
+            // This protects against race conditions that might bypass the memory lock (e.g. server restart or separate processes if scaled)
+            // and logic errors where we might re-activate an active user.
+            const existingSub = await prisma.subscription.findFirst({
+                where: { email },
+                include: { keys: { orderBy: { usedAt: 'desc' }, take: 1 } }
             });
-        }
 
-        // 3. Save Session (upsert)
-        // Extract expiresAt from sessionJson if possible, or default
-        let expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // Default 3 months
-        if (sessionJson.expires) {
-            expiresAt = new Date(sessionJson.expires);
-        }
-        
-        await SessionService.createSession(email, sessionJson, expiresAt, telegramId);
-
-        // 4. Perform Activation
-        const activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionJson);
-
-        if (activationResult.success) {
-            // Mark key as used
-            await KeyService.markKeyAsUsed(key.id, email, subscription.id);
-            
-            // Update subscription count
-            // We need to increment lifetimeActivations, and activationsCount (which is 0 now, so becomes 1)
-            
-            await prisma.subscription.update({
-                where: { id: subscription.id },
-                data: { 
-                    activationsCount: 1, // Explicitly set to 1 for first activation
-                    lifetimeActivations: { increment: 1 }
+            if (existingSub && existingSub.status === 'active') {
+                const lastKey = existingSub.keys[0];
+                if (lastKey && lastKey.usedAt) {
+                    const timeDiff = Date.now() - new Date(lastKey.usedAt).getTime();
+                    if (timeDiff < 2 * 60 * 1000) { // 2 minutes
+                        console.log(`[Sub] Skipping duplicate activation for ${email} (activated ${Math.round(timeDiff/1000)}s ago)`);
+                        return { subscription: existingSub, activationResult: { success: true, message: 'Already activated' } };
+                    }
                 }
-            });
-            
-            // If type is 1m, mark active
-            if (type === '1m') {
-                await prisma.subscription.update({
-                    where: { id: subscription.id },
-                    data: { status: 'active', nextActivationDate: null }
+            }
+
+            // 1. Find available key
+            const key = await KeyService.getAvailableKey();
+
+            if (!key) {
+                throw new Error(`Нет доступных ключей`);
+            }
+
+            // Check if subscription exists
+            let subscription = existingSub; // We already fetched it above
+
+            if (subscription) {
+                 // Update existing subscription
+                 // IMPORTANT: Check if we are creating a new one because the previous one was completed/expired?
+                 // Or is this a "re-subscribe" action?
+                 // If status is 'active', we probably shouldn't be here unless user forces it.
+                 // But let's assume this is a fresh start or upgrade.
+                 
+                 // If we are reactivating a user, we should reset their state properly.
+                 
+                 subscription = await prisma.subscription.update({
+                     where: { id: subscription.id },
+                     data: {
+                         type,
+                         status: 'active',
+                         activationsCount: 0, // Reset for new period
+                         lifetimeActivations: subscription.lifetimeActivations, // Keep lifetime stats
+                         startDate: new Date(),
+                         nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
+                     }
+                 });
+            } else {
+                // 2. Create Subscription Record
+                subscription = await prisma.subscription.create({
+                    data: {
+                        email,
+                        type,
+                        status: 'active',
+                        activationsCount: 0,
+                        nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
+                    }
                 });
             }
+
+            // 3. Save Session (upsert)
+            // Extract expiresAt from sessionJson if possible, or default
+            let expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // Default 3 months
+            if (sessionJson.expires) {
+                expiresAt = new Date(sessionJson.expires);
+            }
             
-            await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email);
+            await SessionService.createSession(email, sessionJson, expiresAt, telegramId);
 
-        } else {
-             // If activation failed
-             await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email);
-             throw new Error(`Ошибка активации: ${activationResult.message}`);
+            // 4. Perform Activation
+            const activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionJson);
+
+            if (activationResult.success) {
+                // Mark key as used
+                await KeyService.markKeyAsUsed(key.id, email, subscription.id);
+                
+                // Update subscription count
+                // We need to increment lifetimeActivations, and activationsCount (which is 0 now, so becomes 1)
+                
+                await prisma.subscription.update({
+                    where: { id: subscription.id },
+                    data: { 
+                        activationsCount: 1, // Explicitly set to 1 for first activation
+                        lifetimeActivations: { increment: 1 }
+                    }
+                });
+                
+                // If type is 1m, mark active
+                if (type === '1m') {
+                    await prisma.subscription.update({
+                        where: { id: subscription.id },
+                        data: { status: 'active', nextActivationDate: null }
+                    });
+                }
+                
+                await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email);
+
+            } else {
+                 // If activation failed
+                 await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email);
+                 throw new Error(`Ошибка активации: ${activationResult.message}`);
+            }
+
+            return { subscription, activationResult };
+        } finally {
+            processingLocks.delete(email);
         }
-
-        return { subscription, activationResult };
     }
 
     static async activateKeyForSubscription(subscriptionId, cdk, sessionJson) {
