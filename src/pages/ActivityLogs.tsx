@@ -14,13 +14,15 @@ export interface LogEntry {
 export function ActivityLogs() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [loading, setLoading] = useState(true);
+    const [filterType, setFilterType] = useState('');
+    const [filterSearch, setFilterSearch] = useState('');
 
     useEffect(() => {
         loadLogs();
         // Poll every 10 seconds
         const interval = setInterval(loadLogs, 10000);
         return () => clearInterval(interval);
-    }, []);
+    }, [filterType, filterSearch]);
 
     const loadLogs = async () => {
         try {
@@ -28,7 +30,11 @@ export function ActivityLogs() {
             if (!token) return;
 
             const response = await axios.get('/api/logs', {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                params: { 
+                    type: filterType,
+                    search: filterSearch
+                }
             });
             setLogs(response.data);
         } catch (e) {
@@ -57,9 +63,35 @@ export function ActivityLogs() {
                 </div>
 
                 <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden min-h-[500px] flex flex-col">
-                    <div className="p-4 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center">
-                        <h3 className="font-medium text-zinc-100">Последние события</h3>
-                        <span className="text-xs text-zinc-500">Auto-updates every 10s</span>
+                    <div className="p-4 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center gap-4">
+                        <div className="flex items-center gap-4 flex-1">
+                            <h3 className="font-medium text-zinc-100 whitespace-nowrap">Последние события</h3>
+                            
+                            {/* Filters */}
+                            <select 
+                                value={filterType}
+                                onChange={(e) => setFilterType(e.target.value)}
+                                className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="">Все типы</option>
+                                <option value="ACTIVATION">Activation</option>
+                                <option value="RENEWAL">Renewal</option>
+                                <option value="ERROR">Error</option>
+                                <option value="KEY_ADDED">Key Added</option>
+                                <option value="ADMIN_LOGIN">Admin Login</option>
+                                <option value="MANUAL_ACTIVATION">Manual Activation</option>
+                                <option value="USER_EDIT">User Edit</option>
+                            </select>
+
+                            <input 
+                                type="text" 
+                                placeholder="Поиск по email или деталям..." 
+                                value={filterSearch}
+                                onChange={(e) => setFilterSearch(e.target.value)}
+                                className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded px-3 py-1 focus:outline-none focus:border-blue-500 flex-1 max-w-xs"
+                            />
+                        </div>
+                        <span className="text-xs text-zinc-500 whitespace-nowrap">Auto-updates every 10s</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-sm">
                         {loading && logs.length === 0 ? (

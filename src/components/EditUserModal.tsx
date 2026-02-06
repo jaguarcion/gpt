@@ -11,6 +11,7 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
     const [email, setEmail] = useState(user?.email || '');
     const [type, setType] = useState(user?.type || '1m');
     const [status, setStatus] = useState(user?.status || 'active');
+    const [note, setNote] = useState(user?.note || '');
     
     // Calculate endDate for display/edit
     // This logic duplicates what's in the table render, ideally should be a helper
@@ -28,7 +29,7 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onSave({ email, type, status, endDate });
+        await onSave({ email, type, status, endDate, note });
         onClose();
     };
 
@@ -70,6 +71,17 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
                             <option value="active">Active</option>
                             <option value="completed">Completed</option>
                         </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Заметка</label>
+                        <textarea 
+                            value={note}
+                            onChange={e => setNote(e.target.value)}
+                            placeholder="Например: Оплатил наличкой"
+                            rows={3}
+                            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
+                        />
                     </div>
 
                     <div>

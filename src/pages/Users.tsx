@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription } from '../services/api';
+import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription, deleteSubscription } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { EditUserModal } from '../components/EditUserModal';
 
@@ -18,6 +18,7 @@ interface Subscription {
   nextActivationDate: string | null;
   status: string;
   activationsCount: number;
+  note: string | null;
   keys: Key[];
 }
 
@@ -32,6 +33,7 @@ export function Users() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
 
   const navigate = useNavigate();
 
@@ -92,6 +94,47 @@ export function Users() {
       }
   };
 
+  const handleDeleteUser = async (id: number) => {
+      if (!window.confirm('Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.')) return;
+      try {
+          await deleteSubscription(id);
+          loadData();
+      } catch (e: any) {
+          alert('Ошибка удаления: ' + (e.response?.data?.error || e.message));
+      }
+  };
+
+  const handleBulkDelete = async () => {
+      if (selectedUsers.length === 0) return;
+      if (!window.confirm(`Удалить выбранных пользователей (${selectedUsers.length})?`)) return;
+      
+      try {
+          for (const id of selectedUsers) {
+              await deleteSubscription(id);
+          }
+          setSelectedUsers([]);
+          loadData();
+      } catch (e: any) {
+          alert('Ошибка массового удаления: ' + (e.message));
+      }
+  };
+
+  const toggleSelectAll = () => {
+      if (selectedUsers.length === subscriptions.length) {
+          setSelectedUsers([]);
+      } else {
+          setSelectedUsers(subscriptions.map(s => s.id));
+      }
+  };
+
+  const toggleSelectUser = (id: number) => {
+      if (selectedUsers.includes(id)) {
+          setSelectedUsers(selectedUsers.filter(uid => uid !== id));
+      } else {
+          setSelectedUsers([...selectedUsers, id]);
+      }
+  };
+
   const handleExportCSV = () => {
       if (subscriptions.length === 0) return;
 
@@ -140,7 +183,15 @@ export function Users() {
             </Link>
             <h1 className="text-2xl font-bold">Список пользователей (Подписки)</h1>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
+            {selectedUsers.length > 0 && (
+                <button 
+                    onClick={handleBulkDelete}
+                    className="text-sm px-3 py-1 bg-red-900/50 text-red-400 border border-red-900 hover:bg-red-900 rounded-md transition-colors"
+                >
+                    Удалить ({selectedUsers.length})
+                </button>
+            )}
             <button 
                 onClick={handleExportCSV}
                 className="text-sm px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
@@ -184,8 +235,17 @@ export function Users() {
             <table className="w-full text-left text-sm">
                 <thead className="bg-zinc-900 text-zinc-400 uppercase text-xs">
                 <tr>
+                    <th className="px-6 py-3 w-4">
+                        <input 
+                            type="checkbox" 
+                            checked={selectedUsers.length > 0 && selectedUsers.length === subscriptions.length}
+                            onChange={toggleSelectAll}
+                            className="rounded border-zinc-700 bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
+                        />
+                    </th>
                     <th className="px-6 py-3">Email</th>
                     <th className="px-6 py-3">Тип</th>
+                    <th className="px-6 py-3">Заметка</th>
                     <th className="px-6 py-3">Статус</th>
                     <th className="px-6 py-3">Дата старта</th>
                     <th className="px-6 py-3">Дата окончания</th>
@@ -204,6 +264,14 @@ export function Users() {
 
                     return (
                     <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors group">
+                    <td className="px-6 py-4">
+                        <input 
+                            type="checkbox" 
+                            checked={selectedUsers.includes(sub.id)}
+                            onChange={() => toggleSelectUser(sub.id)}
+                            className="rounded border-zinc-700 bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
+                        />
+                    </td>
                     <td className="px-6 py-4 font-medium text-white">{sub.email}</td>
                     <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded text-xs ${
@@ -213,6 +281,18 @@ export function Users() {
                         }`}>
                         {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
                         </span>
+                    </td>
+                    <td className="px-6 py-4">
+                        {sub.note ? (
+                            <div className="group/note relative">
+                                <svg className="w-4 h-4 text-yellow-500 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                <div className="absolute left-0 bottom-full mb-2 hidden group-hover/note:block w-48 p-2 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 shadow-xl z-10 whitespace-normal">
+                                    {sub.note}
+                                </div>
+                            </div>
+                        ) : (
+                            <span className="text-zinc-700">-</span>
+                        )}
                     </td>
                     <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded text-xs ${
@@ -259,13 +339,20 @@ export function Users() {
                                 Продлить
                             </button>
                         )}
+                        <button 
+                            onClick={() => handleDeleteUser(sub.id)}
+                            className="text-zinc-500 hover:text-red-400 transition-colors p-1"
+                            title="Удалить"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
                     </td>
                     </tr>
                     );
                 })}
                 {subscriptions.length === 0 && (
                     <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">Пользователи не найдены</td>
+                    <td colSpan={8} className="px-6 py-8 text-center text-zinc-500">Пользователи не найдены</td>
                     </tr>
                 )}
                 </tbody>

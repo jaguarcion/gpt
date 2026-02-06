@@ -74,7 +74,8 @@ import { SubscriptionService } from './services/subscriptionService.js';
 
 app.get('/api/logs', authenticateToken, async (req, res) => {
     try {
-        const logs = await LogService.getLogs(50);
+        const { limit, type, search } = req.query;
+        const logs = await LogService.getLogs(limit || 50, type, search);
         res.json(logs);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -250,6 +251,17 @@ app.put('/api/subscriptions/:id', authenticateToken, async (req, res) => {
         res.json(result);
     } catch (e) {
         console.error('Update User Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/subscriptions/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await SubscriptionService.deleteSubscription(id);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Delete User Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

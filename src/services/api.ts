@@ -59,6 +59,11 @@ export const updateSubscription = async (id: number, data: { email?: string, typ
   return response.data;
 };
 
+export const deleteSubscription = async (id: number) => {
+  const response = await adminApi.delete(`/subscriptions/${id}`);
+  return response.data;
+};
+
 export const deleteKey = async (id: number) => {
   const response = await adminApi.delete(`/keys/${id}`);
   return response.data;

@@ -19,10 +19,24 @@ export class LogService {
         }
     }
 
-    static async getLogs(limit = 50) {
+    static async getLogs(limit = 50, type = '', search = '') {
+        const where = {};
+        
+        if (type) {
+            where.action = type;
+        }
+        
+        if (search) {
+            where.OR = [
+                { email: { contains: search } },
+                { details: { contains: search } }
+            ];
+        }
+
         return prisma.activityLog.findMany({
+            where,
             orderBy: { createdAt: 'desc' },
-            take: limit
+            take: Number(limit)
         });
     }
 }

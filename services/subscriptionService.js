@@ -283,14 +283,39 @@ export class SubscriptionService {
         }
     }
 
+    static async deleteSubscription(id) {
+        // 1. Delete related sessions? No, sessions might be kept or we delete them too.
+        // Usually better to keep history or soft delete. But here we delete hard.
+        
+        // Delete Keys relation? 
+        // Keys are related to Subscription. If we delete subscription, keys.subscriptionId becomes null?
+        // Or we should delete keys too? 
+        // Prisma schema: subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+        // If we don't set onDelete: Cascade, we need to handle it.
+        
+        // Let's disconnect keys first
+        await prisma.key.updateMany({
+            where: { subscriptionId: parseInt(id) },
+            data: { subscriptionId: null }
+        });
+
+        const deleted = await prisma.subscription.delete({
+            where: { id: parseInt(id) }
+        });
+        
+        await LogService.log('USER_DELETE', `Deleted user #${id} (${deleted.email})`);
+        return deleted;
+    }
+
     static async updateSubscription(id, data) {
-        const { email, type, endDate, status } = data;
+        const { email, type, endDate, status, note } = data;
         
         // Prepare update data
         const updateData = {};
         if (email) updateData.email = email;
         if (type) updateData.type = type;
         if (status) updateData.status = status;
+        if (note !== undefined) updateData.note = note;
         
         if (endDate) {
            const end = new Date(endDate);
