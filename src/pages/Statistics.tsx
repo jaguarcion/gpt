@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDailyStats, getFinanceStats, updatePlanConfig, setAuthToken } from '../services/api';
+import { getDailyStats, getFinanceStats, updatePlanConfig, recalculateFinance, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -69,6 +69,18 @@ export function Statistics() {
         } catch (e) {
             console.error('Update config error:', e);
             alert('Ошибка сохранения настроек');
+        }
+    };
+
+    const handleRecalculate = async () => {
+        if (!window.confirm('Это пересчитает исторические данные для всех пользователей, у которых нет данных о продлениях. Продолжить?')) return;
+        try {
+            const result = await recalculateFinance();
+            alert(`Пересчет завершен. Обновлено записей: ${result.updatedCount}`);
+            loadData();
+        } catch (e) {
+            console.error('Recalculate error:', e);
+            alert('Ошибка при пересчете');
         }
     };
 
@@ -150,7 +162,15 @@ export function Statistics() {
                 {/* Config Section */}
                 {showConfig && finance && (
                     <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 animate-in fade-in slide-in-from-top-4 duration-200">
-                        <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-4">Настройки тарифов (Себестоимость и Цена)</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">Настройки тарифов (Себестоимость и Цена)</h3>
+                            <button 
+                                onClick={handleRecalculate}
+                                className="text-xs px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-500 rounded border border-yellow-200 dark:border-yellow-800 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
+                            >
+                                ⚠️ Пересчитать историю
+                            </button>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {['1m', '2m', '3m'].map((type) => {
                                 const config = finance.configs.find((c: any) => c.type === type) || { price: 0, cost: 0 };

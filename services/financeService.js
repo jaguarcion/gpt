@@ -28,6 +28,43 @@ export class FinanceService {
         });
     }
 
+    static async recalculateHistoricalData() {
+        console.log('Starting historical data recalculation...');
+        // Find all subscriptions where lifetimeActivations is 0
+        const subs = await prisma.subscription.findMany({
+            where: {
+                lifetimeActivations: 0
+            }
+        });
+
+        let updatedCount = 0;
+
+        for (const sub of subs) {
+            let fixValue = 0;
+
+            if (sub.activationsCount > 0) {
+                fixValue = sub.activationsCount;
+            } else {
+                // If activationsCount is 0, but user exists and is not just created but has status
+                // We assume 1 activation if status is active, completed or expired
+                if (['active', 'completed', 'expired'].includes(sub.status)) {
+                    fixValue = 1;
+                }
+            }
+
+            if (fixValue > 0) {
+                await prisma.subscription.update({
+                    where: { id: sub.id },
+                    data: { lifetimeActivations: fixValue }
+                });
+                updatedCount++;
+            }
+        }
+        
+        console.log(`Recalculation complete. Updated ${updatedCount} records.`);
+        return { updatedCount };
+    }
+
     static async getFinancialStats() {
         // 1. Get Configs
         const configs = await this.getPlanConfigs();

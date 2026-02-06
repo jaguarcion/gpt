@@ -99,3 +99,8 @@ export const updatePlanConfig = async (type: string, price: number, cost: number
     const response = await adminApi.post('/finance/config', { type, price, cost });
     return response.data;
 };
+
+export const recalculateFinance = async () => {
+    const response = await adminApi.post('/finance/recalculate');
+    return response.data;
+};

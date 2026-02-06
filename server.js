@@ -24,7 +24,7 @@ if (!API_TOKEN) {
 // Security: Rate Limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: 1000, // Limit each IP to 1000 requests per windowMs
     message: { error: 'Too many requests, please try again later.' }
 });
 
@@ -167,6 +167,16 @@ app.post('/api/finance/config', authenticateToken, async (req, res) => {
         res.json(result);
     } catch (e) {
         console.error('Update Finance Config Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/finance/recalculate', authenticateToken, async (req, res) => {
+    try {
+        const result = await FinanceService.recalculateHistoricalData();
+        res.json(result);
+    } catch (e) {
+        console.error('Recalculate Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
