@@ -381,6 +381,8 @@ cron.schedule('0 * * * *', async () => {
     await SubscriptionService.processScheduledActivations();
 });
 
+import './backup_service.js';
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Endpoint: POST http://localhost:${PORT}/api/activate-key`);
