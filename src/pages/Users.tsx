@@ -185,14 +185,14 @@ export function Users() {
             {selectedUsers.length > 0 && (
                 <button 
                     onClick={handleBulkDelete}
-                    className="text-sm px-3 py-1 bg-red-900/50 text-red-400 border border-red-900 hover:bg-red-900 rounded-md transition-colors"
+                    className="text-sm px-3 py-1 bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 hover:bg-red-200 dark:hover:bg-red-900 rounded-md transition-colors"
                 >
                     Удалить ({selectedUsers.length})
                 </button>
             )}
             <button 
                 onClick={handleExportCSV}
-                className="text-sm px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors"
+                className="text-sm px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-md transition-colors"
             >
                 Скачать CSV
             </button>
