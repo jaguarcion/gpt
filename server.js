@@ -42,6 +42,39 @@ app.use(cors({
     }
 }));
 
+app.use(express.json());
+
+// Apply rate limiting to all requests
+app.use(limiter);
+
+const BASE_URL = 'https://freespaces.gmailshop.top';
+
+// Utility to wait
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Auth Middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) return res.status(401).json({ error: 'Unauthorized: Missing token' });
+    // Use timingSafeEqual in production for better security against timing attacks, 
+    // but for simple token simple comparison is often enough for this scale.
+    if (token !== API_TOKEN) return res.status(403).json({ error: 'Forbidden: Invalid token' });
+
+    next();
+};
+
+import { KeyService } from './services/keyService.js';
+import { SessionService } from './services/sessionService.js';
+import { LogService } from './services/logService.js';
+import { SubscriptionService } from './services/subscriptionService.js';
+
+// ... (existing imports and config)
+
+import fs from 'fs';
+import path from 'path';
+
 // --- Settings Management ---
 const SETTINGS_FILE = path.join(process.cwd(), 'settings.json');
 let globalSettings = {
@@ -92,39 +125,6 @@ app.get('/api/public/config', (req, res) => {
     });
 });
 // ---------------------------
-
-app.use(express.json());
-
-// Apply rate limiting to all requests
-app.use(limiter);
-
-const BASE_URL = 'https://freespaces.gmailshop.top';
-
-// Utility to wait
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Auth Middleware
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-    if (!token) return res.status(401).json({ error: 'Unauthorized: Missing token' });
-    // Use timingSafeEqual in production for better security against timing attacks, 
-    // but for simple token simple comparison is often enough for this scale.
-    if (token !== API_TOKEN) return res.status(403).json({ error: 'Forbidden: Invalid token' });
-
-    next();
-};
-
-import { KeyService } from './services/keyService.js';
-import { SessionService } from './services/sessionService.js';
-import { LogService } from './services/logService.js';
-import { SubscriptionService } from './services/subscriptionService.js';
-
-// ... (existing imports and config)
-
-import fs from 'fs';
-import path from 'path';
 
 // ... (existing endpoints)
 
