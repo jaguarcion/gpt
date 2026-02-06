@@ -54,6 +54,8 @@ model Subscription {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   keys                Key[]
+
+  @@map("subscriptions")
 }
 
 // Activity Log Model
