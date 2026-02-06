@@ -65,6 +65,23 @@ const authenticateToken = (req, res, next) => {
     next();
 };
 
+// Request Logger Middleware
+const requestLogger = (req, res, next) => {
+    if (req.path.includes('/activate')) {
+        const timestamp = new Date().toISOString();
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const email = req.body.email || (req.body.user ? JSON.parse(req.body.user).email : 'unknown');
+        
+        console.log(`[REQ] ${timestamp} ${req.method} ${req.path} from ${ip} - Email: ${email}`);
+        
+        // Optionally log to DB if needed, but console is good for real-time debugging
+        // LogService.log('REQUEST', `${req.method} ${req.path} from ${ip}`, email);
+    }
+    next();
+};
+
+app.use(requestLogger);
+
 import { KeyService } from './services/keyService.js';
 import { SessionService } from './services/sessionService.js';
 import { LogService } from './services/logService.js';
