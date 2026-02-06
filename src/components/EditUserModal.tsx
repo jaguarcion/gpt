@@ -78,7 +78,7 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
                         <textarea 
                             value={note}
                             onChange={e => setNote(e.target.value)}
-                            placeholder="Например: Оплатил наличкой"
+                            placeholder="Комментарий"
                             rows={3}
                             className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
                         />
