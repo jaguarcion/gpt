@@ -138,15 +138,31 @@ app.get('/api/keys/stats', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/subscriptions', authenticateToken, async (req, res) => {
-    console.log('GET /api/subscriptions request received');
+app.get('/api/stats/daily', authenticateToken, async (req, res) => {
     try {
-        const { telegramId } = req.query;
-        const subscriptions = telegramId 
-            ? await SubscriptionService.getSubscriptionsByTelegramId(telegramId)
-            : await SubscriptionService.getAllSubscriptions();
-        console.log(`Returning ${subscriptions.length} subscriptions`);
-        res.json(subscriptions);
+        const stats = await SubscriptionService.getDailyStats();
+        res.json(stats);
+    } catch (e) {
+        console.error('Stats Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/subscriptions', authenticateToken, async (req, res) => {
+    try {
+        const { telegramId, page, limit, search } = req.query;
+        
+        if (telegramId) {
+             const subscriptions = await SubscriptionService.getSubscriptionsByTelegramId(telegramId);
+             return res.json({ subscriptions, total: subscriptions.length, totalPages: 1, currentPage: 1 });
+        }
+
+        const result = await SubscriptionService.getAllSubscriptions(
+            parseInt(page) || 1, 
+            parseInt(limit) || 20, 
+            search || ''
+        );
+        res.json(result);
     } catch (e) {
         console.error('Subscriptions Error:', e);
         res.status(500).json({ error: e.message });

@@ -73,7 +73,14 @@ export const addKey = async (codes: string | string[]) => {
   return response.data;
 };
 
-export const getSubscriptions = async () => {
-  const response = await adminApi.get('/subscriptions');
+export const getSubscriptions = async (page = 1, limit = 20, search = '') => {
+  const response = await adminApi.get('/subscriptions', {
+      params: { page, limit, search }
+  });
   return response.data;
+};
+
+export const getDailyStats = async () => {
+    const response = await adminApi.get('/stats/daily');
+    return response.data;
 };

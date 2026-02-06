@@ -4,6 +4,7 @@ import { Home } from './pages/Home';
 import { AdminPanel } from './pages/AdminPanel';
 import { Users } from './pages/Users';
 import { ActivityLogs } from './pages/ActivityLogs';
+import { Statistics } from './pages/Statistics';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/admin/users" element={<Users />} />
         <Route path="/admin/logs" element={<ActivityLogs />} />
+        <Route path="/admin/stats" element={<Statistics />} />
       </Routes>
     </BrowserRouter>
   );

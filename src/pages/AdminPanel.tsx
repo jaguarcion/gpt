@@ -195,6 +195,12 @@ export function AdminPanel() {
           </div>
           <div className="flex items-center gap-4">
             <Link 
+                to="/admin/stats" 
+                className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
+            >
+                Statistics
+            </Link>
+            <Link 
                 to="/admin/logs" 
                 className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
             >
@@ -214,7 +220,7 @@ export function AdminPanel() {
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <StatCard label="Всего ключей" value={stats.total} />
-            <StatCard label="Активные" value={stats.active} color="text-green-500" />
+            <StatCard label="Доступные" value={stats.active} color="text-green-500" />
             <StatCard label="Использованные" value={stats.used} color="text-zinc-500" />
           </div>
         )}

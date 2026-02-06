@@ -27,6 +27,12 @@ export function Users() {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingUser, setEditingUser] = useState<Subscription | null>(null);
+  
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -36,13 +42,19 @@ export function Users() {
       return;
     }
     setAuthToken(token);
-    loadData();
   }, []);
 
+  // Reload when page or search changes
+  useEffect(() => {
+      loadData();
+  }, [page, searchTerm]);
+
   const loadData = async () => {
+    setLoading(true);
     try {
-      const data = await getSubscriptions();
-      setSubscriptions(data);
+      const data = await getSubscriptions(page, limit, searchTerm);
+      setSubscriptions(data.subscriptions);
+      setTotalPages(data.totalPages);
     } catch (e: any) {
       setError(e.message || 'Ошибка загрузки данных');
       if (e.response?.status === 401) {
@@ -156,7 +168,7 @@ export function Users() {
                 type="text" 
                 placeholder="Поиск по Email..." 
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
                 className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
             />
             <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,6 +179,7 @@ export function Users() {
         {loading ? (
             <div className="text-center text-zinc-500 py-10">Загрузка...</div>
         ) : (
+            <>
             <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
             <table className="w-full text-left text-sm">
                 <thead className="bg-zinc-900 text-zinc-400 uppercase text-xs">
@@ -181,7 +194,7 @@ export function Users() {
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                {filteredSubscriptions.map((sub) => {
+                {subscriptions.map((sub) => {
                     const start = new Date(sub.startDate);
                     const monthsToAdd = sub.type === '3m' ? 3 : 1;
                     const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
@@ -246,7 +259,7 @@ export function Users() {
                     </tr>
                     );
                 })}
-                {filteredSubscriptions.length === 0 && (
+                {subscriptions.length === 0 && (
                     <tr>
                     <td colSpan={7} className="px-6 py-8 text-center text-zinc-500">Пользователи не найдены</td>
                     </tr>
@@ -254,6 +267,30 @@ export function Users() {
                 </tbody>
             </table>
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex justify-center gap-2 mt-4">
+                    <button 
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                    >
+                        ←
+                    </button>
+                    <span className="px-3 py-1 text-zinc-500">
+                        Стр. {page} из {totalPages}
+                    </span>
+                    <button 
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                    >
+                        →
+                    </button>
+                </div>
+            )}
+            </>
         )}
       </div>
 

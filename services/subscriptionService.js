@@ -32,15 +32,80 @@ const ACTIVATE_API_URL = `http://localhost:${process.env.PORT || 3001}/api/activ
 const API_TOKEN = process.env.API_TOKEN;
 
 export class SubscriptionService {
-    static async getAllSubscriptions() {
-        return prisma.subscription.findMany({
-            orderBy: { createdAt: 'desc' },
-            include: {
-                keys: {
-                    select: { code: true, usedAt: true }
-                }
+    static async getDailyStats() {
+        // Group subscriptions by date (createdAt)
+        // We want: date, total, type1m, type3m
+        
+        // SQLite doesn't have great date truncation, so we might need to fetch all and process in JS
+        // Or use raw query. Let's use raw query for better performance if possible, or JS for simplicity.
+        // Given the scale, JS processing is fine.
+        
+        const subscriptions = await prisma.subscription.findMany({
+            select: {
+                createdAt: true,
+                type: true
+            },
+            orderBy: {
+                createdAt: 'asc'
             }
         });
+        
+        const statsMap = new Map();
+        
+        subscriptions.forEach(sub => {
+            const date = sub.createdAt.toISOString().split('T')[0];
+            if (!statsMap.has(date)) {
+                statsMap.set(date, { date, total: 0, type1m: 0, type3m: 0 });
+            }
+            
+            const entry = statsMap.get(date);
+            entry.total++;
+            if (sub.type === '1m') entry.type1m++;
+            else if (sub.type === '3m') entry.type3m++;
+        });
+        
+        // Convert map to array and take last 30 days
+        const stats = Array.from(statsMap.values()).slice(-30);
+        
+        // Also get total counts
+        const totalActive = await prisma.subscription.count({ where: { status: 'active' } });
+        const totalCompleted = await prisma.subscription.count({ where: { status: 'completed' } });
+        
+        return {
+            chart: stats,
+            summary: {
+                active: totalActive,
+                completed: totalCompleted
+            }
+        };
+    }
+
+    static async getAllSubscriptions(page = 1, limit = 20, search = '') {
+        const where = search ? {
+            email: { contains: search }
+        } : {};
+
+        const [subscriptions, total] = await Promise.all([
+            prisma.subscription.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+                include: {
+                    keys: {
+                        select: { code: true, usedAt: true }
+                    }
+                }
+            }),
+            prisma.subscription.count({ where })
+        ]);
+
+        return {
+            subscriptions,
+            total,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page
+        };
     }
 
     static async getSubscriptionsByTelegramId(telegramId) {
