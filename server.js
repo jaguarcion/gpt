@@ -476,7 +476,8 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
             console.log(`[${cdk}] Poll ${attempts}: pending=${status.pending}, success=${status.success}`);
 
-            if (!status.pending) {
+            // If success is true, we can return early even if pending is true
+            if (!status.pending || status.success === true) {
                 isPending = false;
                 if (status.success) {
                     console.log(`[${cdk}] Activation SUCCESS!`);
