@@ -109,18 +109,3 @@ export const deleteBackup = async (filename: string) => {
 export const downloadBackupUrl = (filename: string) => {
     return `/api/backups/${filename}`;
 };
-
-export const getSystemResources = async () => {
-    const response = await adminApi.get('/system/resources');
-    return response.data;
-};
-
-export const getSettings = async () => {
-    const response = await adminApi.get('/settings');
-    return response.data;
-};
-
-export const saveSettings = async (settings: any) => {
-    const response = await adminApi.post('/settings', settings);
-    return response.data;
-};

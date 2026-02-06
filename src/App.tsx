@@ -6,7 +6,6 @@ import { Users } from './pages/Users';
 import { ActivityLogs } from './pages/ActivityLogs';
 import { Statistics } from './pages/Statistics';
 import { Backups } from './pages/Backups';
-import { Settings } from './pages/Settings';
 import { ThemeProvider } from './components/ThemeProvider';
 
 function App() {
@@ -20,7 +19,6 @@ function App() {
           <Route path="/admin/logs" element={<ActivityLogs />} />
           <Route path="/admin/stats" element={<Statistics />} />
           <Route path="/admin/backups" element={<Backups />} />
-          <Route path="/admin/settings" element={<Settings />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
