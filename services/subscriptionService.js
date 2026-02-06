@@ -42,13 +42,14 @@ export class SubscriptionService {
         // Cohort Analysis (Simplified Retention)
         // We want to know: How many users created X months ago are still active?
         // Let's group by creation month
+        // Table name is 'subscriptions' as mapped in schema
         const cohorts = await prisma.$queryRaw`
             SELECT 
                 strftime('%Y-%m', createdAt / 1000, 'unixepoch') as month,
                 COUNT(*) as total_users,
                 SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_users,
                 SUM(CASE WHEN activationsCount > 1 THEN 1 ELSE 0 END) as retained_users
-            FROM Subscription
+            FROM subscriptions
             GROUP BY month
             ORDER BY month DESC
             LIMIT 6
