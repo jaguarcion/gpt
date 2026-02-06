@@ -78,6 +78,7 @@ export function ActivityLogs() {
                                 <option value="BACKUP">Backup</option>
                                 <option value="USER_DELETE">User Delete</option>
                                 <option value="ADMIN_ACTIONS">Все действия админа</option>
+                                <option value="AUDIT">Audit (Аудит)</option>
                             </select>
 
                             <input 

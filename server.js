@@ -136,6 +136,7 @@ app.post('/api/backups', authenticateToken, async (req, res) => {
         fs.copyFileSync(dbPath, path.join(backupDir, backupName));
         
         await LogService.log('BACKUP', `Manual backup created: ${backupName}`);
+        await LogService.log('AUDIT', `Admin created backup: ${backupName}`);
         
         res.json({ success: true, name: backupName });
     } catch (e) {
@@ -177,6 +178,7 @@ app.delete('/api/backups/:filename', authenticateToken, async (req, res) => {
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             await LogService.log('BACKUP', `Backup deleted: ${filename}`);
+            await LogService.log('AUDIT', `Admin deleted backup: ${filename}`);
         }
         
         res.json({ success: true });
@@ -203,6 +205,7 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
             await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`);
+            await LogService.log('AUDIT', `Admin added ${result.count} keys via bulk upload`);
             return res.json({ success: true, count: result.count });
         }
 
@@ -210,6 +213,7 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
         if (code) {
             const key = await KeyService.addKey(code);
             await LogService.log('KEY_ADDED', `Added single key: ${code}`);
+            await LogService.log('AUDIT', `Admin added single key: ${code}`);
             return res.json(key);
         }
         
@@ -236,6 +240,7 @@ app.delete('/api/keys/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         await KeyService.deleteKey(id);
+        await LogService.log('AUDIT', `Admin deleted key #${id}`);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -361,6 +366,7 @@ app.post('/api/subscriptions/:id/activate', authenticateToken, async (req, res) 
     try {
         const { id } = req.params;
         const result = await SubscriptionService.manualActivate(id);
+        await LogService.log('AUDIT', `Admin manually activated user #${id}`);
         res.json(result);
     } catch (e) {
         console.error('Manual Activation Error:', e.message);
@@ -375,6 +381,7 @@ app.put('/api/subscriptions/:id', authenticateToken, async (req, res) => {
         const result = await SubscriptionService.updateSubscription(id, { email, type, endDate, status });
         
         await LogService.log('USER_EDIT', `Updated user #${id}: ${JSON.stringify(req.body)}`);
+        await LogService.log('AUDIT', `Admin updated user #${id} (${email})`);
         
         res.json(result);
     } catch (e) {
@@ -387,6 +394,7 @@ app.delete('/api/subscriptions/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         await SubscriptionService.deleteSubscription(id);
+        await LogService.log('AUDIT', `Admin deleted user #${id}`);
         res.json({ success: true });
     } catch (e) {
         console.error('Delete User Error:', e.message);
