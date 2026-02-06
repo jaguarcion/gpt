@@ -8,7 +8,7 @@ import { useTheme } from '../components/ThemeProvider';
 export function Inventory() {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [targetDays, setTargetDays] = useState(30); // Calculator input
+    const [targetDays, setTargetDays] = useState(5); // Calculator input
     const navigate = useNavigate();
     const { theme } = useTheme();
     const [isDark, setIsDark] = useState(true);
