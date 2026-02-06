@@ -2,6 +2,8 @@ import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ModeToggle } from './ModeToggle';
 
+import { ApiStatusWidget } from './ApiStatusWidget';
+
 interface LayoutProps {
     children: React.ReactNode;
 }
@@ -47,6 +49,9 @@ export function Layout({ children }: LayoutProps) {
                     </div>
 
                     <div className="flex items-center gap-4">
+                        <div className="hidden sm:block">
+                             <ApiStatusWidget />
+                        </div>
                         <ModeToggle />
                         <button 
                             onClick={() => { localStorage.removeItem('adminToken'); navigate('/admin'); }}

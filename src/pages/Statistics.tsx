@@ -77,7 +77,6 @@ export function Statistics() {
                     <div className="flex items-center gap-6">
                         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Статистика</h1>
                     </div>
-                    <ApiStatusWidget />
                 </div>
 
                 {/* Summary Cards */}
