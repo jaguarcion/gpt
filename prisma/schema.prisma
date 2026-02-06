@@ -49,6 +49,7 @@ model Subscription {
   nextActivationDate  DateTime?
   status              String   @default("active") // active, completed
   activationsCount    Int      @default(0)
+  lifetimeActivations Int      @default(0)
   note                String?  // Admin notes about the user
   createdAt           DateTime @default(now())
   

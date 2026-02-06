@@ -39,16 +39,15 @@ export class SubscriptionService {
         const type2m = await prisma.subscription.count({ where: { type: '2m', status: 'active' } });
         const type3m = await prisma.subscription.count({ where: { type: '3m', status: 'active' } });
 
-        // Cohort Analysis (Simplified Retention)
-        // We want to know: How many users created X months ago are still active?
-        // Let's group by creation month
-        // Table name is 'subscriptions' as mapped in schema
+        // Cohort Analysis (Lifetime Retention)
+        // Groups by creation month
         const cohorts = await prisma.$queryRaw`
             SELECT 
                 strftime('%Y-%m', createdAt / 1000, 'unixepoch') as month,
                 COUNT(*) as total_users,
                 SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_users,
-                SUM(CASE WHEN activationsCount > 1 THEN 1 ELSE 0 END) as retained_users
+                SUM(CASE WHEN lifetimeActivations >= 2 THEN 1 ELSE 0 END) as retained_1_plus,
+                SUM(CASE WHEN lifetimeActivations >= 3 THEN 1 ELSE 0 END) as retained_2_plus
             FROM subscriptions
             GROUP BY month
             ORDER BY month DESC
@@ -89,7 +88,8 @@ export class SubscriptionService {
             ...c,
             total_users: Number(c.total_users),
             active_users: Number(c.active_users),
-            retained_users: Number(c.retained_users)
+            retained_1_plus: Number(c.retained_1_plus),
+            retained_2_plus: Number(c.retained_2_plus)
         }));
 
         return {
@@ -214,7 +214,10 @@ export class SubscriptionService {
             // Update subscription count
             await prisma.subscription.update({
                 where: { id: subscription.id },
-                data: { activationsCount: { increment: 1 } }
+                data: { 
+                    activationsCount: { increment: 1 },
+                    lifetimeActivations: { increment: 1 }
+                }
             });
             
             // If type is 1m, mark active
@@ -294,6 +297,7 @@ export class SubscriptionService {
                 where: { id: subscription.id },
                 data: { 
                     activationsCount: newCount,
+                    lifetimeActivations: { increment: 1 },
                     status: isFinished ? 'completed' : 'active',
                     nextActivationDate: isFinished ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
                 }
@@ -439,6 +443,7 @@ export class SubscriptionService {
                         where: { id: sub.id },
                         data: { 
                             activationsCount: newCount,
+                            lifetimeActivations: { increment: 1 },
                             status: isFinished ? 'completed' : 'active',
                             nextActivationDate: isFinished ? null : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
                         }

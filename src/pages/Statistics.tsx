@@ -163,12 +163,12 @@ export function Statistics() {
                 {/* Cohort Analysis */}
                 <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
                     <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-2">Когортный анализ (Удержание)</h3>
-                    <p className="text-sm text-zinc-500 mb-6">Показывает, сколько пользователей из каждого месяца продолжают пользоваться сервисом.</p>
+                    <p className="text-sm text-zinc-500 mb-6">Показывает динамику удержания пользователей по месяцам регистрации.</p>
                     
                     <div className="h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                                data={stats.cohorts}
+                            <LineChart
+                                data={[...stats.cohorts].reverse()} // Reverse to show oldest first
                                 margin={{
                                     top: 5,
                                     right: 30,
@@ -187,7 +187,7 @@ export function Statistics() {
                                     tick={{ fill: chartTextColor, fontSize: 12 }}
                                 />
                                 <Tooltip 
-                                    cursor={{ fill: isDark ? '#27272a' : '#f4f4f5' }}
+                                    cursor={{ stroke: isDark ? '#52525b' : '#d4d4d8', strokeWidth: 2 }}
                                     contentStyle={{ 
                                         backgroundColor: isDark ? '#27272a' : '#fff', 
                                         border: `1px solid ${isDark ? '#3f3f46' : '#e4e4e7'}`, 
@@ -196,10 +196,11 @@ export function Statistics() {
                                     }}
                                 />
                                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                <Bar dataKey="total_users" name="Всего новых" fill={isDark ? "#3f3f46" : "#a1a1aa"} radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="active_users" name="Активны сейчас" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="retained_users" name="Продлили (2+ раз)" fill="#10b981" radius={[4, 4, 0, 0]} />
-                            </BarChart>
+                                <Line type="monotone" dataKey="total_users" name="Всего новых" stroke={isDark ? "#71717a" : "#a1a1aa"} strokeWidth={2} dot={{ r: 4 }} />
+                                <Line type="monotone" dataKey="active_users" name="Активны сейчас" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                                <Line type="monotone" dataKey="retained_1_plus" name="Продлили (1+ раз)" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4 }} />
+                                <Line type="monotone" dataKey="retained_2_plus" name="Продлили (2+ раз)" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
+                            </LineChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
