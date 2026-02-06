@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription, deleteSubscription } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { EditUserModal } from '../components/EditUserModal';
-import { ModeToggle } from '../components/ModeToggle';
+import { Layout } from '../components/Layout';
 
 interface Key {
   id: number;
@@ -175,13 +175,10 @@ export function Users() {
   );
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+    <Layout>
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <Link to="/admin" className="text-zinc-400 hover:text-white transition-colors">
-              ← Назад
-            </Link>
             <h1 className="text-2xl font-bold">Список пользователей (Подписки)</h1>
           </div>
           <div className="flex gap-4 items-center">
@@ -199,13 +196,6 @@ export function Users() {
             >
                 Скачать CSV
             </button>
-            <button 
-                onClick={() => { localStorage.removeItem('adminToken'); navigate('/admin'); }}
-                className="text-sm text-zinc-400 hover:text-white"
-            >
-                Выйти
-            </button>
-            <ModeToggle />
           </div>
         </div>
 
@@ -470,6 +460,6 @@ export function Users() {
             user={editingUser}
         />
       )}
-    </div>
+    </Layout>
   );
 }

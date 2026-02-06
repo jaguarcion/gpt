@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getDailyStats, setAuthToken } from '../services/api';
-import { Link, useNavigate } from 'react-router-dom';
+import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
 
@@ -54,11 +54,10 @@ export function Statistics() {
     };
 
     return (
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+        <Layout>
             <div className="max-w-6xl mx-auto space-y-8">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-6">
-                        <Link to="/admin" className="text-zinc-400 hover:text-white transition-colors">← Назад</Link>
                         <h1 className="text-2xl font-bold">Статистика</h1>
                     </div>
                     <ApiStatusWidget />
@@ -208,6 +207,6 @@ export function Statistics() {
                     </table>
                 </div>
             </div>
-        </div>
+        </Layout>
     );
 }

@@ -82,10 +82,18 @@ export class SubscriptionService {
 
         const chart = Array.from(statsMap.values()).slice(-30);
         const totalCompleted = await prisma.subscription.count({ where: { status: 'completed' } });
+        
+        // Fix for BigInt serialization
+        const serializedCohorts = cohorts.map(c => ({
+            ...c,
+            total_users: Number(c.total_users),
+            active_users: Number(c.active_users),
+            retained_users: Number(c.retained_users)
+        }));
 
         return {
             chart,
-            cohorts,
+            cohorts: serializedCohorts,
             summary: {
                 total,
                 active,

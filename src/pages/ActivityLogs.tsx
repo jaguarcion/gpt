@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 
 export interface LogEntry {
@@ -45,16 +45,10 @@ export function ActivityLogs() {
     };
 
     return (
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+        <Layout>
             <div className="max-w-6xl mx-auto space-y-8">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-6">
-                        <Link 
-                            to="/admin" 
-                            className="text-zinc-400 hover:text-zinc-200 transition-colors"
-                        >
-                            ← Назад
-                        </Link>
                         <h1 className="text-2xl font-bold">Activity Logs</h1>
                     </div>
                     <div className="flex items-center gap-4">
@@ -127,6 +121,6 @@ export function ActivityLogs() {
                     </div>
                 </div>
             </div>
-        </div>
+        </Layout>
     );
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
-import { ApiStatusWidget } from '../components/ApiStatusWidget';
-import { Link } from 'react-router-dom';
+import { Layout } from '../components/Layout';
 
 export function AdminPanel() {
   const [token, setToken] = useState('');
@@ -181,39 +180,10 @@ export function AdminPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
+    <Layout>
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-6">
             <h1 className="text-2xl font-bold">Admin Panel</h1>
-            <Link 
-                to="/admin/users" 
-                className="text-blue-400 hover:text-blue-300 font-medium text-sm px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20 transition-all hover:bg-blue-500/20"
-            >
-                Список пользователей →
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link 
-                to="/admin/stats" 
-                className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
-            >
-                Statistics
-            </Link>
-            <Link 
-                to="/admin/logs" 
-                className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-3 py-1.5 rounded-lg border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900"
-            >
-                Activity Logs
-            </Link>
-            <ApiStatusWidget />
-            <button 
-              onClick={() => { setIsAuthenticated(false); localStorage.removeItem('adminToken'); }}
-              className="text-sm text-zinc-400 hover:text-white"
-            >
-              Выйти
-            </button>
-          </div>
         </div>
 
         {/* Stats */}
@@ -355,7 +325,7 @@ export function AdminPanel() {
             )}
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 
