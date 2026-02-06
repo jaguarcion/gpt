@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
 import { Layout } from '../components/Layout';
+import { SystemResourcesWidget } from '../components/SystemResourcesWidget';
 
 export function AdminPanel() {
   const [token, setToken] = useState('');
@@ -186,36 +187,44 @@ export function AdminPanel() {
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Admin Panel</h1>
         </div>
 
-        {/* Stats */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <StatCard label="Всего ключей" value={stats.total} />
-            <StatCard label="Доступные" value={stats.active} color="text-green-600 dark:text-green-500" />
-            <StatCard label="Использованные" value={stats.used} color="text-zinc-600 dark:text-zinc-500" />
-          </div>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-3 space-y-6">
+                {/* Stats */}
+                {stats && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <StatCard label="Всего ключей" value={stats.total} />
+                    <StatCard label="Доступные" value={stats.active} color="text-green-600 dark:text-green-500" />
+                    <StatCard label="Использованные" value={stats.used} color="text-zinc-600 dark:text-zinc-500" />
+                </div>
+                )}
 
-        {/* Add Key */}
-        <div className="bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
-          <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">Добавить ключи (массовая загрузка)</h3>
-          <div className="flex flex-col gap-4">
-            <textarea
-              value={newKeyCodes}
-              onChange={(e) => setNewKeyCodes(e.target.value)}
-              placeholder="Вставьте ключи, каждый с новой строки..."
-              rows={5}
-              className="w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none font-mono text-sm"
-            />
-            <div className="flex justify-end">
-              <button
-                onClick={handleAddKey}
-                className="rounded-md bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
-              >
-                Добавить ключи
-              </button>
+                {/* Add Key */}
+                <div className="bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">Добавить ключи (массовая загрузка)</h3>
+                <div className="flex flex-col gap-4">
+                    <textarea
+                    value={newKeyCodes}
+                    onChange={(e) => setNewKeyCodes(e.target.value)}
+                    placeholder="Вставьте ключи, каждый с новой строки..."
+                    rows={5}
+                    className="w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none font-mono text-sm"
+                    />
+                    <div className="flex justify-end">
+                    <button
+                        onClick={handleAddKey}
+                        className="rounded-md bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+                    >
+                        Добавить ключи
+                    </button>
+                    </div>
+                </div>
+                {message && <div className={`text-sm ${message.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>{message.text}</div>}
+                </div>
             </div>
-          </div>
-          {message && <div className={`text-sm ${message.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>{message.text}</div>}
+
+            <div className="lg:col-span-1">
+                <SystemResourcesWidget />
+            </div>
         </div>
 
         {/* Keys List */}

@@ -42,6 +42,57 @@ app.use(cors({
     }
 }));
 
+// --- Settings Management ---
+const SETTINGS_FILE = path.join(process.cwd(), 'settings.json');
+let globalSettings = {
+    maintenanceMode: false,
+    announcement: '',
+    maxActivationsPerDay: 100 // Example limit
+};
+
+// Load settings on startup
+if (fs.existsSync(SETTINGS_FILE)) {
+    try {
+        const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+        globalSettings = { ...globalSettings, ...JSON.parse(data) };
+    } catch (e) {
+        console.error('Failed to load settings:', e);
+    }
+}
+
+const saveSettings = () => {
+    try {
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(globalSettings, null, 2));
+    } catch (e) {
+        console.error('Failed to save settings:', e);
+    }
+};
+
+app.get('/api/settings', authenticateToken, (req, res) => {
+    res.json(globalSettings);
+});
+
+app.post('/api/settings', authenticateToken, (req, res) => {
+    try {
+        const newSettings = req.body;
+        globalSettings = { ...globalSettings, ...newSettings };
+        saveSettings();
+        LogService.log('ADMIN_ACTIONS', `Updated settings: ${JSON.stringify(newSettings)}`);
+        res.json(globalSettings);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Public endpoint to get announcement (optional, for UI to show banner)
+app.get('/api/public/config', (req, res) => {
+    res.json({
+        maintenance: globalSettings.maintenanceMode,
+        announcement: globalSettings.announcement
+    });
+});
+// ---------------------------
+
 app.use(express.json());
 
 // Apply rate limiting to all requests
@@ -306,6 +357,41 @@ app.get('/api/status', authenticateToken, async (req, res) => {
     }
 });
 
+import os from 'os';
+
+app.get('/api/system/resources', authenticateToken, (req, res) => {
+    try {
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
+        const usedMem = totalMem - freeMem;
+        const memUsage = Math.round((usedMem / totalMem) * 100);
+        
+        const cpus = os.cpus();
+        const cpuModel = cpus[0].model;
+        // Simple load average (on Windows loadavg is always 0, so we might need a workaround or just show basic info)
+        // For accurate CPU usage on Node without external libs is tricky, but we can send loadavg
+        const loadAvg = os.loadavg(); // [1, 5, 15] min
+        
+        res.json({
+            memory: {
+                total: totalMem,
+                free: freeMem,
+                used: usedMem,
+                usage: memUsage
+            },
+            cpu: {
+                model: cpuModel,
+                cores: cpus.length,
+                load: loadAvg
+            },
+            uptime: os.uptime(),
+            platform: os.platform() + ' ' + os.release()
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // New Endpoint for Bot/Admin to create subscription and activate
 app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
     try {
@@ -313,6 +399,10 @@ app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
         
         if (!email || !sessionJson || !subscriptionType || !telegramId) {
             return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        if (globalSettings.maintenanceMode) {
+             return res.status(503).json({ error: 'System is under maintenance.' });
         }
 
         const result = await SubscriptionService.createSubscription(
@@ -374,6 +464,10 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
     if (!cdk || !sessionJson) {
         return res.status(400).json({ error: 'Missing cdk or sessionJson' });
+    }
+
+    if (globalSettings.maintenanceMode) {
+        return res.status(503).json({ error: 'System is under maintenance. Please try again later.' });
     }
 
     // Log the request

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription, deleteSubscription } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { EditUserModal } from '../components/EditUserModal';
+import { UserHistoryModal } from '../components/UserHistoryModal';
 import { Layout } from '../components/Layout';
 
 interface Key {
@@ -34,6 +35,7 @@ export function Users() {
       expiring: false
   });
   const [editingUser, setEditingUser] = useState<Subscription | null>(null);
+  const [viewingHistoryEmail, setViewingHistoryEmail] = useState<string | null>(null);
   
   // Pagination
   const [page, setPage] = useState(1);
@@ -313,6 +315,13 @@ export function Users() {
 
                             <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
                                 <button 
+                                    onClick={() => setViewingHistoryEmail(sub.email)}
+                                    className="p-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-200 dark:bg-zinc-800 rounded"
+                                    title="История"
+                                >
+                                    🕒
+                                </button>
+                                <button 
                                     onClick={() => setEditingUser({ ...sub, status: displayStatus })}
                                     className="p-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-200 dark:bg-zinc-800 rounded"
                                 >
@@ -433,6 +442,13 @@ export function Users() {
                     </td>
                     <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
                         <button 
+                            onClick={() => setViewingHistoryEmail(sub.email)}
+                            className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1"
+                            title="История активности"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </button>
+                        <button 
                             onClick={() => setEditingUser({ ...sub, status: displayStatus })}
                             className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1"
                             title="Редактировать"
@@ -501,6 +517,12 @@ export function Users() {
             user={editingUser}
         />
       )}
+
+      <UserHistoryModal 
+        isOpen={!!viewingHistoryEmail}
+        onClose={() => setViewingHistoryEmail(null)}
+        email={viewingHistoryEmail || ''}
+      />
     </Layout>
   );
 }
