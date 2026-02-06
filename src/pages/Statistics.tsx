@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDailyStats, getFinanceStats, updatePlanConfig, recalculateFinance, setAuthToken } from '../services/api';
+import { getDailyStats, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -8,9 +8,7 @@ import { useTheme } from '../components/ThemeProvider';
 
 export function Statistics() {
     const [stats, setStats] = useState<any>(null);
-    const [finance, setFinance] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [showConfig, setShowConfig] = useState(false);
     const navigate = useNavigate();
     const { theme } = useTheme();
     const [isDark, setIsDark] = useState(true);
@@ -36,51 +34,12 @@ export function Statistics() {
 
     const loadData = async () => {
         try {
-            const [dailyData, financeData] = await Promise.all([
-                getDailyStats(),
-                getFinanceStats()
-            ]);
-            setStats(dailyData);
-            setFinance(financeData);
+            const data = await getDailyStats();
+            setStats(data);
         } catch (e) {
             console.error('Failed to load stats:', e);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleConfigUpdate = async (type: string, field: 'price' | 'cost', value: string) => {
-        if (!finance) return;
-        
-        const numValue = parseInt(value) || 0;
-        const config = finance.configs.find((c: any) => c.type === type);
-        const currentPrice = config?.price || 0;
-        const currentCost = config?.cost || 0;
-
-        try {
-            if (field === 'price') {
-                await updatePlanConfig(type, numValue, currentCost);
-            } else {
-                await updatePlanConfig(type, currentPrice, numValue);
-            }
-            // Reload to update calculations
-            const financeData = await getFinanceStats();
-            setFinance(financeData);
-        } catch (e) {
-            console.error('Update config error:', e);
-            alert('Ошибка сохранения настроек');
-        }
-    };
-
-    const handleRecalculate = async () => {
-        if (!window.confirm('Это пересчитает исторические данные для всех пользователей, у которых нет данных о продлениях. Продолжить?')) return;
-        try {
-            const result = await recalculateFinance();
-            alert(`Пересчет завершен. Обновлено записей: ${result.updatedCount}`);
-            loadData();
-        } catch (e) {
-            console.error('Recalculate error:', e);
-            alert('Ошибка при пересчете');
         }
     };
 
@@ -118,91 +77,8 @@ export function Statistics() {
                     <div className="flex items-center gap-6">
                         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Статистика</h1>
                     </div>
-                    <div className="flex gap-4">
-                        <button 
-                            onClick={() => setShowConfig(!showConfig)}
-                            className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-lg text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-                        >
-                            {showConfig ? 'Скрыть настройки' : 'Настройки тарифов'}
-                        </button>
-                        <ApiStatusWidget />
-                    </div>
+                    <ApiStatusWidget />
                 </div>
-
-                {/* Finance Section */}
-                {finance && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                            <div className="text-zinc-500 text-sm mb-1">Выручка (Total)</div>
-                            <div className="text-2xl font-bold text-zinc-900 dark:text-white">
-                                {finance.totalRevenue.toLocaleString()} ₽
-                            </div>
-                        </div>
-                        <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                            <div className="text-zinc-500 text-sm mb-1">Себестоимость</div>
-                            <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                                {finance.totalCost.toLocaleString()} ₽
-                            </div>
-                        </div>
-                        <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                            <div className="text-zinc-500 text-sm mb-1">Чистая прибыль</div>
-                            <div className={`text-2xl font-bold ${finance.totalProfit >= 0 ? 'text-green-600 dark:text-green-500' : 'text-red-600'}`}>
-                                {finance.totalProfit.toLocaleString()} ₽
-                            </div>
-                        </div>
-                        <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                            <div className="text-zinc-500 text-sm mb-1">MRR (Active)</div>
-                            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                {Math.round(finance.mrr).toLocaleString()} ₽
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Config Section */}
-                {showConfig && finance && (
-                    <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 animate-in fade-in slide-in-from-top-4 duration-200">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">Настройки тарифов (Себестоимость и Цена)</h3>
-                            <button 
-                                onClick={handleRecalculate}
-                                className="text-xs px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-500 rounded border border-yellow-200 dark:border-yellow-800 hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
-                            >
-                                ⚠️ Пересчитать историю
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {['1m', '2m', '3m'].map((type) => {
-                                const config = finance.configs.find((c: any) => c.type === type) || { price: 0, cost: 0 };
-                                return (
-                                    <div key={type} className="space-y-3 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                                        <div className="font-medium text-zinc-900 dark:text-white mb-2">
-                                            {type === '3m' ? '3 Месяца' : (type === '2m' ? '2 Месяца' : '1 Месяц')}
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-zinc-500 block mb-1">Цена продажи (₽)</label>
-                                            <input 
-                                                type="number" 
-                                                defaultValue={config.price}
-                                                onBlur={(e) => handleConfigUpdate(type, 'price', e.target.value)}
-                                                className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-zinc-500 block mb-1">Себестоимость (₽)</label>
-                                            <input 
-                                                type="number" 
-                                                defaultValue={config.cost}
-                                                onBlur={(e) => handleConfigUpdate(type, 'cost', e.target.value)}
-                                                className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -217,6 +93,7 @@ export function Statistics() {
                 </div>
 
                 {/* Chart Section */}
+
                 <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
                     <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-6">Подключения за последние 30 дней</h3>
                     
@@ -286,7 +163,7 @@ export function Statistics() {
 
                 {/* Cohort Analysis */}
                 <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                    <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-2">Когортный анализ (Удержание)</h3>
+                    <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-2">Статистика продлений</h3>
                     <p className="text-sm text-zinc-500 mb-6">Показывает динамику удержания пользователей по месяцам регистрации.</p>
                     
                     <div className="h-[300px] w-full">

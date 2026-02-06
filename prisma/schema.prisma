@@ -42,28 +42,18 @@ model Session {
 
 // Subscription Model
 model Subscription {
-  id                  Int      @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   email               String
-  type                String   // 1m, 3m
-  startDate           DateTime @default(now())
+  type                String // "1m", "3m"
+  status              String // "active", "completed", "expired"
+  startDate           DateTime  @default(now())
+  activationsCount    Int       @default(0)
+  lifetimeActivations Int       @default(0)
   nextActivationDate  DateTime?
-  status              String   @default("active") // active, completed
-  activationsCount    Int      @default(0)
-  lifetimeActivations Int      @default(0)
-  note                String?  // Admin notes about the user
-  createdAt           DateTime @default(now())
-  
-  // Relations
+  note                String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   keys                Key[]
-  
-  @@map("subscriptions")
-}
-
-model PlanConfig {
-  id        Int      @id @default(autoincrement())
-  type      String   @unique // '1m', '2m', '3m'
-  price     Int      @default(0) // Selling price
-  cost      Int      @default(0) // Cost price
 }
 
 // Activity Log Model

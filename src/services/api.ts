@@ -89,18 +89,3 @@ export const getDailyStats = async () => {
     const response = await adminApi.get('/stats/daily');
     return response.data;
 };
-
-export const getFinanceStats = async () => {
-    const response = await adminApi.get('/finance/stats');
-    return response.data;
-};
-
-export const updatePlanConfig = async (type: string, price: number, cost: number) => {
-    const response = await adminApi.post('/finance/config', { type, price, cost });
-    return response.data;
-};
-
-export const recalculateFinance = async () => {
-    const response = await adminApi.post('/finance/recalculate');
-    return response.data;
-};
