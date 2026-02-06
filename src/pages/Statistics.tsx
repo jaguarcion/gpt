@@ -65,10 +65,10 @@ export function Statistics() {
                 <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800">
                     <h3 className="text-lg font-medium mb-6">Подключения за последние 30 дней</h3>
                     
-                    <div className="h-64 flex items-end gap-2 overflow-x-auto pb-2">
+                    <div className="h-64 flex gap-2 overflow-x-auto pb-2 pt-10 items-stretch">
                         {stats.chart.map((day: any) => (
                             <div key={day.date} className="flex-1 min-w-[30px] flex flex-col items-center gap-2 group">
-                                <div className="w-full flex flex-col-reverse h-full justify-end relative">
+                                <div className="w-full flex flex-col-reverse flex-1 relative">
                                     {/* Tooltip */}
                                     <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-zinc-800 text-xs p-2 rounded hidden group-hover:block z-10 whitespace-nowrap border border-zinc-700">
                                         <div className="font-bold">{day.date}</div>
