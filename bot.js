@@ -48,6 +48,7 @@ bot.start((ctx) => {
     userStates.delete(ctx.from.id);
     const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('1 месяц', 'plan_1m')],
+        [Markup.button.callback('2 месяца', 'plan_2m')],
         [Markup.button.callback('3 месяца', 'plan_3m')]
     ]);
     ctx.reply('Выберите тип подписки:', { parse_mode: 'Markdown', ...keyboard });
@@ -61,6 +62,12 @@ bot.command('cancel', (ctx) => {
 bot.action('plan_1m', (ctx) => {
     userStates.set(ctx.from.id, { step: 'WAITING_SESSION', type: '1m' });
     ctx.reply('Вы выбрали: *1 месяц*.\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
+    ctx.answerCbQuery();
+});
+
+bot.action('plan_2m', (ctx) => {
+    userStates.set(ctx.from.id, { step: 'WAITING_SESSION', type: '2m' });
+    ctx.reply('Вы выбрали: *2 месяца*.\n(Бот будет активировать по 1 ключу каждый месяц).\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
     ctx.answerCbQuery();
 });
 
@@ -175,11 +182,17 @@ async function performActivation(ctx, email, sessionJson, type) {
             
             if (type === '3m') {
                 msg += `\n\n📅 Это первая активация из 3-х. Следующая активация запланирована автоматически через 30 дней.`;
+            } else if (type === '2m') {
+                msg += `\n\n📅 Это первая активация из 2-х. Следующая активация запланирована автоматически через 30 дней.`;
             }
 
-            msg += `\n\nНажмите /start для новой активации.`;
+            const keyboard = Markup.inlineKeyboard([
+                [Markup.button.callback('1 месяц', 'plan_1m')],
+                [Markup.button.callback('2 месяца', 'plan_2m')],
+                [Markup.button.callback('3 месяца', 'plan_3m')]
+            ]);
             
-            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { parse_mode: 'Markdown' });
+            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { parse_mode: 'Markdown', ...keyboard });
         } else {
              const errorText = result.activationResult?.message || 'Неизвестная ошибка';
              let failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка активации*: ${errorText}`;

@@ -98,7 +98,7 @@ export function Users() {
       const headers = ['ID', 'Email', 'Type', 'Status', 'Start Date', 'End Date', 'Activations Count', 'Keys'];
       const rows = subscriptions.map(sub => {
           const start = new Date(sub.startDate);
-          const monthsToAdd = sub.type === '3m' ? 3 : 1;
+          const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
           const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
           const keys = sub.keys.map(k => k.code).join('; ');
 
@@ -196,18 +196,22 @@ export function Users() {
                 <tbody className="divide-y divide-zinc-800">
                 {subscriptions.map((sub) => {
                     const start = new Date(sub.startDate);
-                    const monthsToAdd = sub.type === '3m' ? 3 : 1;
+                    const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
                     const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
                     const now = new Date();
-                    const showExtend = sub.activationsCount < 3 && endDate < now;
+                    const showExtend = sub.activationsCount < (sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1)) && endDate < now;
                     const displayStatus = endDate < now ? 'completed' : 'active';
 
                     return (
                     <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors group">
                     <td className="px-6 py-4 font-medium text-white">{sub.email}</td>
                     <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-xs ${sub.type === '3m' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                        {sub.type === '3m' ? '3 Месяца' : '1 Месяц'}
+                        <span className={`px-2 py-1 rounded text-xs ${
+                            sub.type === '3m' ? 'bg-purple-500/20 text-purple-400' : 
+                            sub.type === '2m' ? 'bg-green-500/20 text-green-400' :
+                            'bg-blue-500/20 text-blue-400'
+                        }`}>
+                        {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
                         </span>
                     </td>
                     <td className="px-6 py-4">

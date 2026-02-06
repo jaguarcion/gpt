@@ -17,7 +17,7 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
     const getEndDate = () => {
         if (!user) return '';
         const start = new Date(user.startDate);
-        const monthsToAdd = user.type === '3m' ? 3 : 1;
+        const monthsToAdd = user.type === '3m' ? 3 : (user.type === '2m' ? 2 : 1);
         const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
         return endDate.toISOString().split('T')[0];
     };
@@ -55,6 +55,7 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
                             className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                         >
                             <option value="1m">1 Месяц</option>
+                            <option value="2m">2 Месяца</option>
                             <option value="3m">3 Месяца</option>
                         </select>
                     </div>

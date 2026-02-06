@@ -55,12 +55,13 @@ export class SubscriptionService {
         subscriptions.forEach(sub => {
             const date = sub.createdAt.toISOString().split('T')[0];
             if (!statsMap.has(date)) {
-                statsMap.set(date, { date, total: 0, type1m: 0, type3m: 0 });
+                statsMap.set(date, { date, total: 0, type1m: 0, type2m: 0, type3m: 0 });
             }
             
             const entry = statsMap.get(date);
             entry.total++;
             if (sub.type === '1m') entry.type1m++;
+            else if (sub.type === '2m') entry.type2m++;
             else if (sub.type === '3m') entry.type3m++;
         });
         
@@ -153,7 +154,7 @@ export class SubscriptionService {
                      status: 'active',
                      activationsCount: 0, // Reset for new period
                      startDate: new Date(),
-                     nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
+                     nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
                  }
              });
         } else {
@@ -164,7 +165,7 @@ export class SubscriptionService {
                     type,
                     status: 'active',
                     activationsCount: 0,
-                    nextActivationDate: type === '3m' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
+                    nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
                 }
             });
         }
@@ -238,8 +239,8 @@ export class SubscriptionService {
             throw new Error('Подписка не найдена');
         }
 
-        if (subscription.activationsCount >= 3) {
-            throw new Error('Достигнут лимит активаций (3)');
+        if (subscription.activationsCount >= (subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1))) {
+            throw new Error(`Достигнут лимит активаций (${subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1)})`);
         }
 
         // Get Session
@@ -261,7 +262,8 @@ export class SubscriptionService {
             await KeyService.markKeyAsUsed(key.id, subscription.email, subscription.id);
             
             const newCount = subscription.activationsCount + 1;
-            const isFinished = newCount >= 3;
+            const maxRounds = subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1);
+            const isFinished = newCount >= maxRounds;
             
             await prisma.subscription.update({
                 where: { id: subscription.id },
@@ -273,7 +275,7 @@ export class SubscriptionService {
             });
 
             // notifyAdmins(`🛠 *Ручная активация*\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
-            await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/3`, subscription.email);
+            await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/${maxRounds}`, subscription.email);
             return { success: true, message: 'Успешно активировано', round: newCount };
         } else {
             await LogService.log('ERROR', `Manual activation failed for #${subscription.id}: ${result.message}`, subscription.email);
@@ -292,7 +294,7 @@ export class SubscriptionService {
         
         if (endDate) {
            const end = new Date(endDate);
-           const months = type === '3m' ? 3 : 1;
+           const months = type === '3m' ? 3 : (type === '2m' ? 2 : 1);
            // New start date = end date - duration
            const newStart = new Date(end);
            newStart.setMonth(newStart.getMonth() - months);
@@ -319,7 +321,7 @@ export class SubscriptionService {
 
         for (const sub of activeSubs) {
             const start = new Date(sub.startDate);
-            const monthsToAdd = sub.type === '3m' ? 3 : 1;
+            const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
             const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
             
             if (endDate < now) {
@@ -332,11 +334,15 @@ export class SubscriptionService {
         }
 
         // 2. Find active subscriptions where nextActivationDate is past due
-        const dueSubscriptions = await prisma.subscription.findMany({
+            const dueSubscriptions = await prisma.subscription.findMany({
             where: {
                 status: 'active',
                 nextActivationDate: { lte: now },
-                activationsCount: { lt: 3 }
+                OR: [
+                    { type: '3m', activationsCount: { lt: 3 } },
+                    { type: '2m', activationsCount: { lt: 2 } },
+                    { type: '1m', activationsCount: { lt: 1 } } // Should not happen if logic correct, but for safety
+                ]
             }
         });
 
@@ -376,7 +382,8 @@ export class SubscriptionService {
                     await KeyService.markKeyAsUsed(key.id, sub.email, sub.id);
                     
                     const newCount = sub.activationsCount + 1;
-                    const isFinished = newCount >= 3;
+                    const maxRounds = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
+                    const isFinished = newCount >= maxRounds;
                     
                     await prisma.subscription.update({
                         where: { id: sub.id },
@@ -387,8 +394,8 @@ export class SubscriptionService {
                         }
                     });
                     console.log(`[Scheduler] Successfully activated round ${newCount} for ${sub.email}`);
-                    notifyAdmins(`🔄 *Успешное продление*\nEmail: \`${sub.email}\`\nРаунд: ${newCount}/3\nID Подписки: ${sub.id}`);
-                    await LogService.log('RENEWAL', `Auto-renewed subscription #${sub.id}, round ${newCount}/3`, sub.email);
+                    notifyAdmins(`🔄 *Успешное продление*\nEmail: \`${sub.email}\`\nРаунд: ${newCount}/${maxRounds}\nID Подписки: ${sub.id}`);
+                    await LogService.log('RENEWAL', `Auto-renewed subscription #${sub.id}, round ${newCount}/${maxRounds}`, sub.email);
                 } else {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
                     notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);

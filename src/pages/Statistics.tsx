@@ -124,6 +124,14 @@ export function Statistics() {
                                 />
                                 <Line 
                                     type="monotone" 
+                                    dataKey="type2m" 
+                                    name="2 Месяца" 
+                                    stroke="#10b981" 
+                                    strokeWidth={2}
+                                    dot={{ fill: '#10b981', r: 4 }}
+                                />
+                                <Line 
+                                    type="monotone" 
                                     dataKey="type3m" 
                                     name="3 Месяца" 
                                     stroke="#a855f7" 
@@ -143,6 +151,7 @@ export function Statistics() {
                                 <th className="px-6 py-3">Дата</th>
                                 <th className="px-6 py-3">Всего</th>
                                 <th className="px-6 py-3">1 Месяц</th>
+                                <th className="px-6 py-3">2 Месяца</th>
                                 <th className="px-6 py-3">3 Месяца</th>
                             </tr>
                         </thead>
@@ -152,6 +161,7 @@ export function Statistics() {
                                     <td className="px-6 py-4 font-mono text-zinc-400">{day.date}</td>
                                     <td className="px-6 py-4 font-bold text-white">{day.total}</td>
                                     <td className="px-6 py-4 text-blue-400">{day.type1m}</td>
+                                    <td className="px-6 py-4 text-green-400">{day.type2m}</td>
                                     <td className="px-6 py-4 text-purple-400">{day.type3m}</td>
                                 </tr>
                             ))}
