@@ -32,14 +32,29 @@ const ACTIVATE_API_URL = `http://localhost:${process.env.PORT || 3001}/api/activ
 const API_TOKEN = process.env.API_TOKEN;
 
 export class SubscriptionService {
-    static async getDailyStats() {
-        // Group subscriptions by date (createdAt)
-        // We want: date, total, type1m, type3m
-        
-        // SQLite doesn't have great date truncation, so we might need to fetch all and process in JS
-        // Or use raw query. Let's use raw query for better performance if possible, or JS for simplicity.
-        // Given the scale, JS processing is fine.
-        
+    static async getStats() {
+        const total = await prisma.subscription.count();
+        const active = await prisma.subscription.count({ where: { status: 'active' } });
+        const type1m = await prisma.subscription.count({ where: { type: '1m', status: 'active' } });
+        const type2m = await prisma.subscription.count({ where: { type: '2m', status: 'active' } });
+        const type3m = await prisma.subscription.count({ where: { type: '3m', status: 'active' } });
+
+        // Cohort Analysis (Simplified Retention)
+        // We want to know: How many users created X months ago are still active?
+        // Let's group by creation month
+        const cohorts = await prisma.$queryRaw`
+            SELECT 
+                strftime('%Y-%m', createdAt / 1000, 'unixepoch') as month,
+                COUNT(*) as total_users,
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_users,
+                SUM(CASE WHEN activationsCount > 1 THEN 1 ELSE 0 END) as retained_users
+            FROM Subscription
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT 6
+        `;
+
+        // Daily chart data (last 30 days)
         const subscriptions = await prisma.subscription.findMany({
             select: {
                 createdAt: true,
@@ -64,19 +79,20 @@ export class SubscriptionService {
             else if (sub.type === '2m') entry.type2m++;
             else if (sub.type === '3m') entry.type3m++;
         });
-        
-        // Convert map to array and take last 30 days
-        const stats = Array.from(statsMap.values()).slice(-30);
-        
-        // Also get total counts
-        const totalActive = await prisma.subscription.count({ where: { status: 'active' } });
+
+        const chart = Array.from(statsMap.values()).slice(-30);
         const totalCompleted = await prisma.subscription.count({ where: { status: 'completed' } });
-        
+
         return {
-            chart: stats,
+            chart,
+            cohorts,
             summary: {
-                active: totalActive,
-                completed: totalCompleted
+                total,
+                active,
+                completed: totalCompleted,
+                type1m,
+                type2m,
+                type3m
             }
         };
     }

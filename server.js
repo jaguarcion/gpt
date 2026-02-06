@@ -141,7 +141,7 @@ app.get('/api/keys/stats', authenticateToken, async (req, res) => {
 
 app.get('/api/stats/daily', authenticateToken, async (req, res) => {
     try {
-        const stats = await SubscriptionService.getDailyStats();
+        const stats = await SubscriptionService.getStats();
         res.json(stats);
     } catch (e) {
         console.error('Stats Error:', e.message);

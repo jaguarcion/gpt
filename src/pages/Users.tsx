@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription, deleteSubscription } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { EditUserModal } from '../components/EditUserModal';
+import { ModeToggle } from '../components/ModeToggle';
 
 interface Key {
   id: number;
@@ -204,6 +205,7 @@ export function Users() {
             >
                 Выйти
             </button>
+            <ModeToggle />
           </div>
         </div>
 
@@ -231,7 +233,82 @@ export function Users() {
             <div className="text-center text-zinc-500 py-10">Загрузка...</div>
         ) : (
             <>
-            <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
+            {/* Mobile View: Cards */}
+            <div className="block md:hidden space-y-4">
+                {subscriptions.map(sub => {
+                    const start = new Date(sub.startDate);
+                    const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
+                    const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
+                    const now = new Date();
+                    const showExtend = sub.activationsCount < (sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1)) && endDate < now;
+                    const displayStatus = endDate < now ? 'completed' : 'active';
+                    
+                    return (
+                        <div key={sub.id} className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 space-y-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="font-medium text-white">{sub.email}</div>
+                                    <div className="text-xs text-zinc-500 font-mono mt-1">ID: {sub.id}</div>
+                                </div>
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                    sub.type === '3m' ? 'bg-purple-500/20 text-purple-400' : 
+                                    sub.type === '2m' ? 'bg-green-500/20 text-green-400' :
+                                    'bg-blue-500/20 text-blue-400'
+                                }`}>
+                                    {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
+                                </span>
+                            </div>
+
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-zinc-400">Статус:</span>
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                    displayStatus === 'active' ? 'bg-green-500/20 text-green-400' : 
+                                    displayStatus === 'completed' ? 'bg-zinc-700 text-zinc-300' : 'bg-red-500/20 text-red-400'
+                                }`}>
+                                    {displayStatus}
+                                </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2 text-xs text-zinc-400">
+                                <div>Старт: {new Date(sub.startDate).toLocaleDateString()}</div>
+                                <div>Конец: {endDate.toLocaleDateString()}</div>
+                            </div>
+
+                            {sub.note && (
+                                <div className="text-xs bg-yellow-500/10 text-yellow-500 p-2 rounded border border-yellow-500/20">
+                                    📝 {sub.note}
+                                </div>
+                            )}
+
+                            <div className="pt-3 border-t border-zinc-800 flex justify-end gap-3">
+                                <button 
+                                    onClick={() => setEditingUser({ ...sub, status: displayStatus })}
+                                    className="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded"
+                                >
+                                    ✏️ Ред.
+                                </button>
+                                {showExtend && (
+                                    <button 
+                                        onClick={() => handleManualActivate(sub.id)}
+                                        className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+                                    >
+                                        Продлить
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={() => handleDeleteUser(sub.id)}
+                                    className="p-2 text-red-400 bg-red-900/20 rounded"
+                                >
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Desktop View: Table */}
+            <div className="hidden md:block bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
             <table className="w-full text-left text-sm">
                 <thead className="bg-zinc-900 text-zinc-400 uppercase text-xs">
                 <tr>

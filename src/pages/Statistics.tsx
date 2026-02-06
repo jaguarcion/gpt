@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getDailyStats, setAuthToken } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
 
 export function Statistics() {
     const [stats, setStats] = useState<any>(null);
@@ -139,6 +139,45 @@ export function Statistics() {
                                     dot={{ fill: '#a855f7', r: 4 }}
                                 />
                             </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Cohort Analysis */}
+                <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800">
+                    <h3 className="text-lg font-medium mb-2">Когортный анализ (Удержание)</h3>
+                    <p className="text-sm text-zinc-500 mb-6">Показывает, сколько пользователей из каждого месяца продолжают пользоваться сервисом.</p>
+                    
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                                data={stats.cohorts}
+                                margin={{
+                                    top: 5,
+                                    right: 30,
+                                    left: 20,
+                                    bottom: 5,
+                                }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                                <XAxis 
+                                    dataKey="month" 
+                                    stroke="#71717a" 
+                                    tick={{ fill: '#71717a', fontSize: 12 }}
+                                />
+                                <YAxis 
+                                    stroke="#71717a" 
+                                    tick={{ fill: '#71717a', fontSize: 12 }}
+                                />
+                                <Tooltip 
+                                    cursor={{ fill: '#27272a' }}
+                                    contentStyle={{ backgroundColor: '#27272a', border: '1px solid #3f3f46', borderRadius: '8px' }}
+                                />
+                                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                <Bar dataKey="total_users" name="Всего новых" fill="#3f3f46" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="active_users" name="Активны сейчас" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="retained_users" name="Продлили (2+ раз)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                            </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
