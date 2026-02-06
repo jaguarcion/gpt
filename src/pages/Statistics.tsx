@@ -1,13 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { getDailyStats } from '../services/api';
-import { Link } from 'react-router-dom';
+import { getDailyStats, setAuthToken } from '../services/api';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 
 export function Statistics() {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+            navigate('/admin');
+            return;
+        }
+        setAuthToken(token);
         loadData();
     }, []);
 
