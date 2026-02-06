@@ -35,6 +35,15 @@ export default defineConfig({
   },
   build: {
     sourcemap: 'hidden',
+    rollupOptions: {
+        output: {
+            manualChunks: {
+                vendor: ['react', 'react-dom', 'react-router-dom'],
+                charts: ['recharts'],
+                ui: ['lucide-react', 'clsx', 'tailwind-merge']
+            }
+        }
+    }
   },
   plugins: [
     react({
