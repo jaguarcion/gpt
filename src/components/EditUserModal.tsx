@@ -35,25 +35,25 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md shadow-xl">
-                <h2 className="text-xl font-bold text-white mb-4">Редактировать пользователя</h2>
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 w-full max-w-md shadow-xl">
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-4">Редактировать пользователя</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-xs text-zinc-400 mb-1">Email</label>
+                        <label className="block text-xs text-zinc-600 dark:text-zinc-400 mb-1">Email</label>
                         <input 
                             type="email" 
                             value={email}
                             onChange={e => setEmail(e.target.value)}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500"
                         />
                     </div>
                     
                     <div>
-                        <label className="block text-xs text-zinc-400 mb-1">Тип подписки</label>
+                        <label className="block text-xs text-zinc-600 dark:text-zinc-400 mb-1">Тип подписки</label>
                         <select 
                             value={type}
                             onChange={e => setType(e.target.value)}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500"
                         >
                             <option value="1m">1 Месяц</option>
                             <option value="2m">2 Месяца</option>
@@ -62,11 +62,11 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
                     </div>
 
                     <div>
-                        <label className="block text-xs text-zinc-400 mb-1">Статус</label>
+                        <label className="block text-xs text-zinc-600 dark:text-zinc-400 mb-1">Статус</label>
                         <select 
                             value={status}
                             onChange={e => setStatus(e.target.value)}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500"
                         >
                             <option value="active">Active</option>
                             <option value="completed">Completed</option>
@@ -74,23 +74,23 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
                     </div>
 
                     <div>
-                        <label className="block text-xs text-zinc-400 mb-1">Заметка</label>
+                        <label className="block text-xs text-zinc-600 dark:text-zinc-400 mb-1">Заметка</label>
                         <textarea 
                             value={note}
                             onChange={e => setNote(e.target.value)}
                             placeholder="Комментарий"
                             rows={3}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500 resize-none"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs text-zinc-400 mb-1">Дата окончания (изменит дату старта)</label>
+                        <label className="block text-xs text-zinc-600 dark:text-zinc-400 mb-1">Дата окончания (изменит дату старта)</label>
                         <input 
                             type="date" 
                             value={endDate}
                             onChange={e => setEndDate(e.target.value)}
-                            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500"
                         />
                         <p className="text-[10px] text-zinc-500 mt-1">
                             Внимание: изменение даты окончания автоматически пересчитает дату старта на основе типа подписки.
@@ -101,7 +101,7 @@ export function EditUserModal({ isOpen, onClose, onSave, user }: EditUserModalPr
                         <button 
                             type="button" 
                             onClick={onClose}
-                            className="px-4 py-2 text-zinc-400 hover:text-white transition-colors"
+                            className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
                         >
                             Отмена
                         </button>

@@ -34,10 +34,10 @@ export function ApiStatusWidget() {
     if (loading && !status) return <div className="text-zinc-500 text-xs">Checking API...</div>;
 
     return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
             <div className={`w-2 h-2 rounded-full ${status?.online ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
             <div className="flex flex-col">
-                <span className="text-xs font-medium text-zinc-300">
+                <span className="text-xs font-medium text-zinc-900 dark:text-zinc-300">
                     API: {status?.online ? 'Online' : 'Offline'}
                 </span>
                 {status?.online && (

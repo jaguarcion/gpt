@@ -149,7 +149,7 @@ export function AdminPanel() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center">
         <div className="text-zinc-500">Загрузка...</div>
       </div>
     );
@@ -157,15 +157,15 @@ export function AdminPanel() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-        <div className="bg-zinc-900/50 p-8 rounded-xl border border-zinc-800 shadow-xl max-w-md w-full space-y-4">
-          <h2 className="text-xl font-bold text-zinc-100 text-center">Admin Login</h2>
+      <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-zinc-900/50 p-8 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xl max-w-md w-full space-y-4">
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 text-center">Admin Login</h2>
           <input
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             placeholder="Enter API Token"
-            className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <button
             onClick={handleLogin}
@@ -183,28 +183,28 @@ export function AdminPanel() {
     <Layout>
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">Admin Panel</h1>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Admin Panel</h1>
         </div>
 
         {/* Stats */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <StatCard label="Всего ключей" value={stats.total} />
-            <StatCard label="Доступные" value={stats.active} color="text-green-500" />
-            <StatCard label="Использованные" value={stats.used} color="text-zinc-500" />
+            <StatCard label="Доступные" value={stats.active} color="text-green-600 dark:text-green-500" />
+            <StatCard label="Использованные" value={stats.used} color="text-zinc-600 dark:text-zinc-500" />
           </div>
         )}
 
         {/* Add Key */}
-        <div className="bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 space-y-4">
-          <h3 className="text-lg font-medium">Добавить ключи (массовая загрузка)</h3>
+        <div className="bg-zinc-50 dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+          <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">Добавить ключи (массовая загрузка)</h3>
           <div className="flex flex-col gap-4">
             <textarea
               value={newKeyCodes}
               onChange={(e) => setNewKeyCodes(e.target.value)}
               placeholder="Вставьте ключи, каждый с новой строки..."
               rows={5}
-              className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none font-mono text-sm"
+              className="w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none font-mono text-sm"
             />
             <div className="flex justify-end">
               <button
@@ -224,34 +224,34 @@ export function AdminPanel() {
                 <div className="flex gap-2">
                     <button 
                         onClick={() => { setStatusFilter('all'); setPage(1); }}
-                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'all' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                     >
                         Все
                     </button>
                     <button 
                         onClick={() => { setStatusFilter('active'); setPage(1); }}
-                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'active' ? 'bg-green-500/20 text-green-600 dark:text-green-400 border border-green-500/20' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                     >
                         Active
                     </button>
                     <button 
                         onClick={() => { setStatusFilter('used'); setPage(1); }}
-                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'used' ? 'bg-zinc-700 text-zinc-300' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'used' ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                     >
                         Used
                     </button>
                 </div>
                 <button 
                     onClick={handleExportCSV}
-                    className="text-sm px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md transition-colors text-zinc-300"
+                    className="text-sm px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-md transition-colors text-zinc-700 dark:text-zinc-300"
                 >
                     Скачать CSV
                 </button>
             </div>
 
-            <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
+            <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-900 text-zinc-400 uppercase text-xs">
+                <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs">
                 <tr>
                     <th className="px-6 py-3">ID</th>
                     <th className="px-6 py-3">Code</th>
@@ -261,30 +261,30 @@ export function AdminPanel() {
                     <th className="px-6 py-3"></th>
                 </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {keys.map((key) => (
-                    <tr key={key.id} className="hover:bg-zinc-800/50 transition-colors">
+                    <tr key={key.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                     <td className="px-6 py-4 font-mono text-zinc-500">{key.id}</td>
-                    <td className="px-6 py-4 font-mono text-zinc-300">
+                    <td className="px-6 py-4 font-mono text-zinc-700 dark:text-zinc-300">
                         <span 
                         onClick={() => copyToClipboard(key.code)} 
-                        className="cursor-pointer hover:text-white"
+                        className="cursor-pointer hover:text-blue-500 dark:hover:text-white"
                         title="Click to copy"
                         >
                         {key.code}
                         </span>
                     </td>
                     <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded text-xs ${key.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-zinc-700 text-zinc-400'}`}>
+                        <span className={`px-2 py-1 rounded text-xs ${key.status === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'}`}>
                         {key.status}
                         </span>
                     </td>
-                    <td className="px-6 py-4 text-zinc-400">{key.usedByEmail || '-'}</td>
+                    <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">{key.usedByEmail || '-'}</td>
                     <td className="px-6 py-4 text-zinc-500">{new Date(key.createdAt).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-right">
                         <button 
                             onClick={() => handleDeleteKey(key.id)}
-                            className="text-zinc-600 hover:text-red-500 transition-colors"
+                            className="text-zinc-400 hover:text-red-500 transition-colors"
                             title="Удалить"
                         >
                             ✕
@@ -307,7 +307,7 @@ export function AdminPanel() {
                     <button 
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                        className="px-3 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                     >
                         ←
                     </button>
@@ -317,7 +317,7 @@ export function AdminPanel() {
                     <button 
                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
-                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                        className="px-3 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                     >
                         →
                     </button>
@@ -329,11 +329,14 @@ export function AdminPanel() {
   );
 }
 
-function StatCard({ label, value, color = 'text-white' }: { label: string, value: number, color?: string }) {
+function StatCard({ label, value, color }: { label: string, value: number, color?: string }) {
+  // If color is not provided, default to zinc-900 (light) / white (dark)
+  const valueColor = color || 'text-zinc-900 dark:text-white';
+  
   return (
-    <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800">
+    <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800">
       <div className="text-zinc-500 text-sm mb-1">{label}</div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div className={`text-2xl font-bold ${valueColor}`}>{value}</div>
     </div>
   );
 }

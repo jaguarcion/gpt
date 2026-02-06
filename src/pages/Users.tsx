@@ -212,9 +212,9 @@ export function Users() {
                 placeholder="Поиск по Email..." 
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
+                className="w-full bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-xl px-4 py-3 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
             />
-            <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
         </div>
@@ -234,60 +234,60 @@ export function Users() {
                     const displayStatus = endDate < now ? 'completed' : 'active';
                     
                     return (
-                        <div key={sub.id} className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 space-y-3">
+                        <div key={sub.id} className="bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-3">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <div className="font-medium text-white">{sub.email}</div>
+                                    <div className="font-medium text-zinc-900 dark:text-white">{sub.email}</div>
                                     <div className="text-xs text-zinc-500 font-mono mt-1">ID: {sub.id}</div>
                                 </div>
                                 <span className={`px-2 py-1 rounded text-xs ${
-                                    sub.type === '3m' ? 'bg-purple-500/20 text-purple-400' : 
-                                    sub.type === '2m' ? 'bg-green-500/20 text-green-400' :
-                                    'bg-blue-500/20 text-blue-400'
+                                    sub.type === '3m' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 
+                                    sub.type === '2m' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                                    'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                                 }`}>
                                     {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
                                 </span>
                             </div>
 
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-zinc-400">Статус:</span>
+                                <span className="text-zinc-600 dark:text-zinc-400">Статус:</span>
                                 <span className={`px-2 py-1 rounded text-xs ${
-                                    displayStatus === 'active' ? 'bg-green-500/20 text-green-400' : 
-                                    displayStatus === 'completed' ? 'bg-zinc-700 text-zinc-300' : 'bg-red-500/20 text-red-400'
+                                    displayStatus === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 
+                                    displayStatus === 'completed' ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300' : 'bg-red-500/10 text-red-600 dark:text-red-400'
                                 }`}>
                                     {displayStatus}
                                 </span>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-2 text-xs text-zinc-400">
+                            <div className="grid grid-cols-2 gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                                 <div>Старт: {new Date(sub.startDate).toLocaleDateString()}</div>
                                 <div>Конец: {endDate.toLocaleDateString()}</div>
                             </div>
 
                             {sub.note && (
-                                <div className="text-xs bg-yellow-500/10 text-yellow-500 p-2 rounded border border-yellow-500/20">
+                                <div className="text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 p-2 rounded border border-yellow-500/20">
                                     📝 {sub.note}
                                 </div>
                             )}
 
-                            <div className="pt-3 border-t border-zinc-800 flex justify-end gap-3">
+                            <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex justify-end gap-3">
                                 <button 
                                     onClick={() => setEditingUser({ ...sub, status: displayStatus })}
-                                    className="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded"
+                                    className="p-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white bg-zinc-200 dark:bg-zinc-800 rounded"
                                 >
                                     ✏️ Ред.
                                 </button>
                                 {showExtend && (
                                     <button 
                                         onClick={() => handleManualActivate(sub.id)}
-                                        className="px-3 py-2 bg-blue-600 text-white rounded text-sm"
+                                        className="px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
                                     >
                                         Продлить
                                     </button>
                                 )}
                                 <button 
                                     onClick={() => handleDeleteUser(sub.id)}
-                                    className="p-2 text-red-400 bg-red-900/20 rounded"
+                                    className="p-2 text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 rounded hover:bg-red-200 dark:hover:bg-red-900/40"
                                 >
                                     🗑️
                                 </button>
@@ -298,16 +298,16 @@ export function Users() {
             </div>
 
             {/* Desktop View: Table */}
-            <div className="hidden md:block bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
+            <div className="hidden md:block bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-900 text-zinc-400 uppercase text-xs">
+                <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs">
                 <tr>
                     <th className="px-6 py-3 w-4">
                         <input 
                             type="checkbox" 
                             checked={selectedUsers.length > 0 && selectedUsers.length === subscriptions.length}
                             onChange={toggleSelectAll}
-                            className="rounded border-zinc-700 bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
+                            className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </th>
                     <th className="px-6 py-3">Email</th>
@@ -320,7 +320,7 @@ export function Users() {
                     <th className="px-6 py-3 text-right">Действия</th>
                 </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {subscriptions.map((sub) => {
                     const start = new Date(sub.startDate);
                     const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
@@ -330,21 +330,21 @@ export function Users() {
                     const displayStatus = endDate < now ? 'completed' : 'active';
 
                     return (
-                    <tr key={sub.id} className="hover:bg-zinc-800/50 transition-colors group">
+                    <tr key={sub.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
                     <td className="px-6 py-4">
                         <input 
                             type="checkbox" 
                             checked={selectedUsers.includes(sub.id)}
                             onChange={() => toggleSelectUser(sub.id)}
-                            className="rounded border-zinc-700 bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
+                            className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </td>
-                    <td className="px-6 py-4 font-medium text-white">{sub.email}</td>
+                    <td className="px-6 py-4 font-medium text-zinc-900 dark:text-white">{sub.email}</td>
                     <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded text-xs ${
-                            sub.type === '3m' ? 'bg-purple-500/20 text-purple-400' : 
-                            sub.type === '2m' ? 'bg-green-500/20 text-green-400' :
-                            'bg-blue-500/20 text-blue-400'
+                            sub.type === '3m' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 
+                            sub.type === '2m' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                            'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                         }`}>
                         {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
                         </span>
@@ -358,21 +358,21 @@ export function Users() {
                                 </div>
                             </div>
                         ) : (
-                            <span className="text-zinc-700">-</span>
+                            <span className="text-zinc-400 dark:text-zinc-600">-</span>
                         )}
                     </td>
                     <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded text-xs ${
-                            displayStatus === 'active' ? 'bg-green-500/20 text-green-400' : 
-                            displayStatus === 'completed' ? 'bg-zinc-700 text-zinc-300' : 'bg-red-500/20 text-red-400'
+                            displayStatus === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 
+                            displayStatus === 'completed' ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300' : 'bg-red-500/10 text-red-600 dark:text-red-400'
                         }`}>
                         {displayStatus}
                         </span>
                     </td>
-                    <td className="px-6 py-4 text-zinc-400">
+                    <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
                         {new Date(sub.startDate).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 text-zinc-400">
+                    <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
                         {endDate.toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
@@ -380,20 +380,20 @@ export function Users() {
                             {sub.keys.map(k => (
                                 <span 
                                     key={k.id} 
-                                    className="font-mono text-xs text-zinc-500 cursor-pointer hover:text-zinc-300"
+                                    className="font-mono text-xs text-zinc-500 hover:text-blue-500 dark:hover:text-zinc-300 cursor-pointer"
                                     onClick={() => copyToClipboard(k.code)}
                                     title="Нажмите чтобы скопировать"
                                 >
                                     {k.code}
                                 </span>
                             ))}
-                            {sub.keys.length === 0 && <span className="text-zinc-600">-</span>}
+                            {sub.keys.length === 0 && <span className="text-zinc-400 dark:text-zinc-600">-</span>}
                         </div>
                     </td>
                     <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
                         <button 
                             onClick={() => setEditingUser({ ...sub, status: displayStatus })}
-                            className="text-zinc-500 hover:text-blue-400 transition-colors p-1"
+                            className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1"
                             title="Редактировать"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -408,7 +408,7 @@ export function Users() {
                         )}
                         <button 
                             onClick={() => handleDeleteUser(sub.id)}
-                            className="text-zinc-500 hover:text-red-400 transition-colors p-1"
+                            className="text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1"
                             title="Удалить"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -432,7 +432,7 @@ export function Users() {
                     <button 
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                        className="px-3 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                     >
                         ←
                     </button>
@@ -442,7 +442,7 @@ export function Users() {
                     <button 
                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
-                        className="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 disabled:opacity-50 hover:bg-zinc-800"
+                        className="px-3 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 disabled:opacity-50 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                     >
                         →
                     </button>

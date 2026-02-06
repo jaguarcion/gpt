@@ -56,16 +56,16 @@ export function ActivityLogs() {
                     </div>
                 </div>
 
-                <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden min-h-[500px] flex flex-col">
-                    <div className="p-4 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center gap-4">
+                <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden min-h-[500px] flex flex-col">
+                    <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 flex justify-between items-center gap-4">
                         <div className="flex items-center gap-4 flex-1">
-                            <h3 className="font-medium text-zinc-100 whitespace-nowrap">Последние события</h3>
+                            <h3 className="font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">Последние события</h3>
                             
                             {/* Filters */}
                             <select 
                                 value={filterType}
                                 onChange={(e) => setFilterType(e.target.value)}
-                                className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                                className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-300 text-sm rounded px-2 py-1 focus:outline-none focus:border-blue-500"
                             >
                                 <option value="">Все типы</option>
                                 <option value="ACTIVATION">Activation</option>
@@ -82,7 +82,7 @@ export function ActivityLogs() {
                                 placeholder="Поиск по email или деталям..." 
                                 value={filterSearch}
                                 onChange={(e) => setFilterSearch(e.target.value)}
-                                className="bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded px-3 py-1 focus:outline-none focus:border-blue-500 flex-1 max-w-xs"
+                                className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-300 text-sm rounded px-3 py-1 focus:outline-none focus:border-blue-500 flex-1 max-w-xs"
                             />
                         </div>
                         <span className="text-xs text-zinc-500 whitespace-nowrap">Auto-updates every 10s</span>
@@ -94,24 +94,24 @@ export function ActivityLogs() {
                             <div className="text-zinc-500 text-center py-4">No activity recorded yet.</div>
                         ) : (
                             logs.map(log => (
-                                <div key={log.id} className="flex gap-4 text-zinc-400 hover:bg-zinc-800/30 p-2 rounded transition-colors border-b border-zinc-800/30 last:border-0">
-                                    <span className="text-zinc-600 whitespace-nowrap w-24">
+                                <div key={log.id} className="flex gap-4 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 p-2 rounded transition-colors border-b border-zinc-100 dark:border-zinc-800/30 last:border-0">
+                                    <span className="text-zinc-500 dark:text-zinc-600 whitespace-nowrap w-24">
                                         {new Date(log.createdAt).toLocaleTimeString()}
                                         <div className="text-[10px] opacity-60">{new Date(log.createdAt).toLocaleDateString()}</div>
                                     </span>
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className={`font-bold px-2 py-0.5 rounded text-xs ${
-                                                log.action === 'ERROR' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                log.action.includes('ACTIVATION') ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                                                log.action === 'KEY_ADDED' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                                'bg-zinc-800 text-zinc-300'
+                                                log.action === 'ERROR' ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20' :
+                                                log.action.includes('ACTIVATION') ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20' :
+                                                log.action === 'KEY_ADDED' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20' :
+                                                'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
                                             }`}>
                                                 {log.action}
                                             </span>
                                             {log.email && <span className="text-zinc-500 text-xs">User: {log.email}</span>}
                                         </div>
-                                        <span className="text-zinc-300 break-all">
+                                        <span className="text-zinc-800 dark:text-zinc-300 break-all">
                                             {log.details}
                                         </span>
                                     </div>
