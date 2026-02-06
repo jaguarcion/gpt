@@ -67,13 +67,13 @@ bot.action('plan_1m', (ctx) => {
 
 bot.action('plan_2m', (ctx) => {
     userStates.set(ctx.from.id, { step: 'WAITING_SESSION', type: '2m' });
-    ctx.reply('Вы выбрали: *2 месяца*.\n(Бот будет активировать по 1 ключу каждый месяц).\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
+    ctx.reply('Вы выбрали: *2 месяца*.\n\nБот будет активировать по 1 ключу каждый месяц).\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
     ctx.answerCbQuery();
 });
 
 bot.action('plan_3m', (ctx) => {
     userStates.set(ctx.from.id, { step: 'WAITING_SESSION', type: '3m' });
-    ctx.reply('Вы выбрали: *3 месяца*.\n(Бот будет активировать по 1 ключу каждый месяц).\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
+    ctx.reply('Вы выбрали: *3 месяца*.\n\n(Бот будет активировать по 1 ключу каждый месяц).\n\nТеперь отправьте *JSON сессии*.', { parse_mode: 'Markdown' });
     ctx.answerCbQuery();
 });
 
@@ -126,7 +126,7 @@ bot.on('text', async (ctx) => {
 
 async function performActivation(ctx, email, sessionJson, type) {
     const userId = ctx.from.id;
-    const initialMsg = await ctx.reply(`Данные получены (${type}, ${email}).\nНачинаю активацию... ⏳`);
+    const initialMsg = await ctx.reply(`Данные получены (${type}, ${email}).\n\nНачинаю активацию... ⏳`);
 
     let isFinished = false;
     
@@ -178,7 +178,7 @@ async function performActivation(ctx, email, sessionJson, type) {
 
         if (result.activationResult && result.activationResult.success) {
             const taskId = result.activationResult.data?.task_id || 'N/A';
-            let msg = `Данные получены (${type}, ${email}).\n✅ *Успешно активировано!*`;
+            let msg = `Данные получены (${type}, ${email}).\n\n✅ *Успешно активировано!*\n\nВыберите срок новой активации.`;
             
             if (type === '3m') {
                 msg += `\n\n📅 Это первая активация из 3-х. Следующая активация запланирована автоматически через 30 дней.`;
@@ -195,7 +195,7 @@ async function performActivation(ctx, email, sessionJson, type) {
             await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { parse_mode: 'Markdown', ...keyboard });
         } else {
              const errorText = result.activationResult?.message || 'Неизвестная ошибка';
-             let failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка активации*: ${errorText}`;
+             let failMsg = `Данные получены (${type}, ${email}).\n\n❌ *Ошибка активации*: ${errorText}`;
              failMsg += `\n\nНажмите /start для новой активации.`;
             await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
         }
@@ -205,11 +205,11 @@ async function performActivation(ctx, email, sessionJson, type) {
         console.error('Bot Activation Error:', error.message);
         let errorMsg = 'Произошла ошибка при обращении к серверу.';
         if (error.response?.data?.message) {
-            errorMsg += `\nДетали: ${error.response.data.message}`;
+            errorMsg += `\n\nДетали: ${error.response.data.message}`;
         } else if (error.response?.data?.error) {
-            errorMsg += `\nДетали: ${error.response.data.error}`;
+            errorMsg += `\n\nДетали: ${error.response.data.error}`;
         }
-        let failMsg = `Данные получены (${type}, ${email}).\n❌ *Ошибка*: ${errorMsg}`;
+        let failMsg = `Данные получены (${type}, ${email}).\n\n❌ *Ошибка*: ${errorMsg}`;
         failMsg += `\n\nНажмите /start для новой активации.`;
         await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
     } finally {
