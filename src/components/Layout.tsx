@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ModeToggle } from './ModeToggle';
-
 import { ApiStatusWidget } from './ApiStatusWidget';
+import { NotificationCenter } from './NotificationCenter';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -19,6 +19,7 @@ export function Layout({ children }: LayoutProps) {
         { path: '/admin/stats', label: 'Статистика' },
         { path: '/admin/backups', label: 'Бэкапы' },
         { path: '/admin/inventory', label: 'Склад' },
+        { path: '/admin/health', label: 'Система' },
     ];
 
     return (
@@ -49,10 +50,11 @@ export function Layout({ children }: LayoutProps) {
                         </nav>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
                         <div className="hidden sm:block">
                              <ApiStatusWidget />
                         </div>
+                        <NotificationCenter />
                         <ModeToggle />
                         <button 
                             onClick={() => { localStorage.removeItem('adminToken'); navigate('/admin'); }}

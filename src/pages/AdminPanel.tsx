@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
 import { Layout } from '../components/Layout';
+import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
 
 export function AdminPanel() {
   const [token, setToken] = useState('');
@@ -16,6 +17,17 @@ export function AdminPanel() {
   const [limit, setLimit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Column customization
+  const keyColumns: Column[] = [
+      { key: 'id', label: 'ID' },
+      { key: 'code', label: 'Code', required: true },
+      { key: 'status', label: 'Status' },
+      { key: 'usedBy', label: 'Used By' },
+      { key: 'createdAt', label: 'Created At' },
+      { key: 'actions', label: 'Действия', required: true },
+  ];
+  const { visible: visibleCols, toggle: toggleCol, isVisible: isColVisible, reset: resetCols } = useColumnVisibility('keys', keyColumns);
 
   const handleLogin = async () => {
     if (!token) return;
@@ -241,6 +253,7 @@ export function AdminPanel() {
                         Used
                     </button>
                 </div>
+                <ColumnSelector columns={keyColumns} visible={visibleCols} onToggle={toggleCol} onReset={resetCols} />
                 <button 
                     onClick={handleExportCSV}
                     className="text-sm px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-md transition-colors text-zinc-700 dark:text-zinc-300"
@@ -250,22 +263,23 @@ export function AdminPanel() {
             </div>
 
             <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="max-h-[70vh] overflow-y-auto">
             <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs">
+                <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs sticky top-0 z-10">
                 <tr>
-                    <th className="px-6 py-3">ID</th>
-                    <th className="px-6 py-3">Code</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3">Used By</th>
-                    <th className="px-6 py-3">Created At</th>
-                    <th className="px-6 py-3"></th>
+                    {isColVisible('id') && <th className="px-6 py-3">ID</th>}
+                    {isColVisible('code') && <th className="px-6 py-3">Code</th>}
+                    {isColVisible('status') && <th className="px-6 py-3">Status</th>}
+                    {isColVisible('usedBy') && <th className="px-6 py-3">Used By</th>}
+                    {isColVisible('createdAt') && <th className="px-6 py-3">Created At</th>}
+                    {isColVisible('actions') && <th className="px-6 py-3"></th>}
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {keys.map((key) => (
                     <tr key={key.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                    <td className="px-6 py-4 font-mono text-zinc-500">{key.id}</td>
-                    <td className="px-6 py-4 font-mono text-zinc-700 dark:text-zinc-300">
+                    {isColVisible('id') && <td className="px-6 py-4 font-mono text-zinc-500">{key.id}</td>}
+                    {isColVisible('code') && <td className="px-6 py-4 font-mono text-zinc-700 dark:text-zinc-300">
                         <span 
                         onClick={() => copyToClipboard(key.code)} 
                         className="cursor-pointer hover:text-blue-500 dark:hover:text-white"
@@ -273,15 +287,15 @@ export function AdminPanel() {
                         >
                         {key.code}
                         </span>
-                    </td>
-                    <td className="px-6 py-4">
+                    </td>}
+                    {isColVisible('status') && <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded text-xs ${key.status === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'}`}>
                         {key.status}
                         </span>
-                    </td>
-                    <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">{key.usedByEmail || '-'}</td>
-                    <td className="px-6 py-4 text-zinc-500">{new Date(key.createdAt).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-right">
+                    </td>}
+                    {isColVisible('usedBy') && <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">{key.usedByEmail || '-'}</td>}
+                    {isColVisible('createdAt') && <td className="px-6 py-4 text-zinc-500">{new Date(key.createdAt).toLocaleDateString()}</td>}
+                    {isColVisible('actions') && <td className="px-6 py-4 text-right">
                         <button 
                             onClick={() => handleDeleteKey(key.id)}
                             className="text-zinc-400 hover:text-red-500 transition-colors"
@@ -289,16 +303,17 @@ export function AdminPanel() {
                         >
                             ✕
                         </button>
-                    </td>
+                    </td>}
                     </tr>
                 ))}
                 {keys.length === 0 && (
                     <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-zinc-500">Нет ключей</td>
+                    <td colSpan={visibleCols.length} className="px-6 py-8 text-center text-zinc-500">Нет ключей</td>
                     </tr>
                 )}
                 </tbody>
             </table>
+            </div>
             </div>
             
             {/* Pagination */}

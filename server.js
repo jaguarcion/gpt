@@ -4,6 +4,7 @@ import axios from 'axios';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import os from 'os';
 
 dotenv.config();
 
@@ -82,6 +83,7 @@ const requestLogger = (req, res, next) => {
 
 app.use(requestLogger);
 
+import prisma from './services/db.js';
 import { KeyService } from './services/keyService.js';
 import { SessionService } from './services/sessionService.js';
 import { LogService } from './services/logService.js';
@@ -524,6 +526,224 @@ cron.schedule('0 * * * *', async () => {
 });
 
 import './backup_service.js';
+
+// ===================== NOTIFICATIONS =====================
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+    try {
+        const notifications = [];
+        const now = new Date();
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+        // 1. Recent errors (last 24h)
+        const allErrors = await LogService.getLogs(20, 'ERROR');
+        const recentErrors = allErrors.filter(e => new Date(e.createdAt) > oneDayAgo);
+        recentErrors.forEach(e => {
+            notifications.push({
+                id: `error-${e.id}`,
+                type: 'error',
+                title: 'Ошибка активации',
+                message: e.details || 'Неизвестная ошибка',
+                email: e.email,
+                createdAt: e.createdAt
+            });
+        });
+
+        // 2. Low key inventory
+        const keyStats = await KeyService.getStats();
+        if (keyStats.active === 0) {
+            notifications.push({
+                id: 'no-keys',
+                type: 'error',
+                title: 'Ключи закончились!',
+                message: 'На складе 0 доступных ключей. Активации невозможны.',
+                createdAt: now
+            });
+        } else if (keyStats.active < 10) {
+            notifications.push({
+                id: 'low-keys',
+                type: 'warning',
+                title: 'Мало ключей на складе',
+                message: `Осталось ${keyStats.active} ключей. Рекомендуем пополнить запас.`,
+                createdAt: now
+            });
+        }
+
+        // 3. Backup recency check
+        const backupDir = path.join(process.cwd(), 'backups');
+        if (fs.existsSync(backupDir)) {
+            const backupFiles = fs.readdirSync(backupDir)
+                .filter(f => f.endsWith('.db'))
+                .map(f => ({ name: f, time: fs.statSync(path.join(backupDir, f)).mtime }))
+                .sort((a, b) => b.time - a.time);
+
+            if (backupFiles.length > 0) {
+                const lastBackup = backupFiles[0];
+                const hoursSinceBackup = (now - lastBackup.time) / (1000 * 60 * 60);
+                if (hoursSinceBackup > 5) {
+                    notifications.push({
+                        id: 'backup-old',
+                        type: 'warning',
+                        title: 'Бэкап устарел',
+                        message: `Последний бэкап создан ${Math.floor(hoursSinceBackup)} ч. назад (ожидается каждые 4 часа).`,
+                        createdAt: lastBackup.time
+                    });
+                }
+            } else {
+                notifications.push({
+                    id: 'no-backups',
+                    type: 'warning',
+                    title: 'Нет бэкапов',
+                    message: 'Не найдено ни одного бэкапа базы данных.',
+                    createdAt: now
+                });
+            }
+        }
+
+        // 4. Expiring subscriptions (within 3 days)
+        const activeSubs = await prisma.subscription.findMany({ where: { status: 'active' } });
+        const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+        let expiringCount = 0;
+        activeSubs.forEach(sub => {
+            const start = new Date(sub.startDate);
+            const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
+            const endDate = new Date(start);
+            endDate.setMonth(endDate.getMonth() + monthsToAdd);
+            if (endDate <= threeDaysFromNow && endDate >= now) {
+                expiringCount++;
+            }
+        });
+        if (expiringCount > 0) {
+            notifications.push({
+                id: 'expiring-subs',
+                type: 'warning',
+                title: 'Подписки истекают',
+                message: `${expiringCount} подписок истекают в ближайшие 3 дня.`,
+                createdAt: now
+            });
+        }
+
+        // 5. Recent successful renewals (info)
+        const allRenewals = await LogService.getLogs(5, 'RENEWAL');
+        const recentRenewals = allRenewals.filter(r => new Date(r.createdAt) > oneDayAgo);
+        recentRenewals.forEach(r => {
+            notifications.push({
+                id: `renewal-${r.id}`,
+                type: 'success',
+                title: 'Успешное продление',
+                message: r.details || 'Подписка продлена',
+                email: r.email,
+                createdAt: r.createdAt
+            });
+        });
+
+        notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        res.json(notifications);
+    } catch (e) {
+        console.error('Notifications Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ===================== HEALTH CHECK =====================
+app.get('/api/health', authenticateToken, async (req, res) => {
+    try {
+        const now = new Date();
+
+        // Server info
+        const serverUptime = process.uptime();
+        const mem = process.memoryUsage();
+        const osMem = { total: os.totalmem(), free: os.freemem() };
+        const nodeVersion = process.version;
+        const platform = `${os.platform()} ${os.arch()} (${os.release()})`;
+
+        // DB size
+        const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
+        let dbSize = 0;
+        if (fs.existsSync(dbPath)) {
+            dbSize = fs.statSync(dbPath).size;
+        }
+
+        // DB record counts
+        const [keyCount, sessionCount, subCount, logCount] = await Promise.all([
+            prisma.key.count(),
+            prisma.session.count(),
+            prisma.subscription.count(),
+            prisma.activityLog.count()
+        ]);
+
+        // Backup info
+        const backupDir = path.join(process.cwd(), 'backups');
+        let backupInfo = { count: 0, totalSize: 0, lastBackup: null, lastBackupName: null };
+        if (fs.existsSync(backupDir)) {
+            const files = fs.readdirSync(backupDir).filter(f => f.endsWith('.db'));
+            let totalSize = 0;
+            let lastTime = null;
+            let lastName = null;
+            files.forEach(f => {
+                const stat = fs.statSync(path.join(backupDir, f));
+                totalSize += stat.size;
+                if (!lastTime || stat.mtime > lastTime) {
+                    lastTime = stat.mtime;
+                    lastName = f;
+                }
+            });
+            backupInfo = { count: files.length, totalSize, lastBackup: lastTime, lastBackupName: lastName };
+        }
+
+        // Key inventory
+        const activeKeys = await prisma.key.count({ where: { status: 'active' } });
+        const usedKeys = await prisma.key.count({ where: { status: 'used' } });
+
+        // Active subscriptions
+        const activeSubs = await prisma.subscription.count({ where: { status: 'active' } });
+
+        // Cron schedules (static info since we know them)
+        const cronJobs = [
+            { name: 'Проверка продлений', schedule: '0 * * * *', description: 'Каждый час' },
+            { name: 'Авто-бэкап БД', schedule: '0 */4 * * *', description: 'Каждые 4 часа' },
+            { name: 'Плановые активации', schedule: '0 10 * * *', description: 'Ежедневно в 10:00' }
+        ];
+
+        res.json({
+            server: {
+                uptime: serverUptime,
+                nodeVersion,
+                platform,
+                startedAt: new Date(now.getTime() - serverUptime * 1000)
+            },
+            memory: {
+                rss: mem.rss,
+                heapUsed: mem.heapUsed,
+                heapTotal: mem.heapTotal,
+                external: mem.external,
+                osTotal: osMem.total,
+                osFree: osMem.free
+            },
+            database: {
+                size: dbSize,
+                records: {
+                    keys: keyCount,
+                    sessions: sessionCount,
+                    subscriptions: subCount,
+                    logs: logCount
+                }
+            },
+            backups: backupInfo,
+            inventory: {
+                activeKeys,
+                usedKeys,
+                totalKeys: activeKeys + usedKeys
+            },
+            subscriptions: {
+                active: activeSubs
+            },
+            cronJobs
+        });
+    } catch (e) {
+        console.error('Health Check Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

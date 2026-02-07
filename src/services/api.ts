@@ -114,3 +114,15 @@ export const getInventoryStats = async () => {
     const response = await adminApi.get('/inventory/stats');
     return response.data;
 };
+
+// Notifications API
+export const getNotifications = async () => {
+    const response = await adminApi.get('/notifications');
+    return response.data;
+};
+
+// Health API
+export const getHealth = async () => {
+    const response = await adminApi.get('/health');
+    return response.data;
+};
