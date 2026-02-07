@@ -32,8 +32,14 @@ export function Users() {
   const [filters, setFilters] = useState({
       status: 'all',
       type: 'all',
-      expiring: false
+      expiring: false,
+      dateFrom: '',
+      dateTo: '',
+      emailProvider: '',
+      activationsMin: '',
+      activationsMax: ''
   });
+  const [showDeepSearch, setShowDeepSearch] = useState(false);
   const [editingUser, setEditingUser] = useState<Subscription | null>(null);
   const [viewingHistoryEmail, setViewingHistoryEmail] = useState<string | null>(null);
   
@@ -214,18 +220,77 @@ export function Users() {
 
         {/* Search and Filters */}
         <div className="space-y-4">
-            <div className="relative">
-                <input 
-                    type="text" 
-                    placeholder="Поиск по Email..." 
-                    value={searchTerm}
-                    onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                    className="w-full bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-xl px-4 py-3 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
-                />
-                <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <input 
+                        type="text" 
+                        placeholder="Поиск по Email..." 
+                        value={searchTerm}
+                        onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                        className="w-full bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 rounded-xl px-4 py-3 text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-10"
+                    />
+                    <svg className="w-5 h-5 absolute left-3 top-3.5 text-zinc-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                <button 
+                    onClick={() => setShowDeepSearch(!showDeepSearch)}
+                    className={`px-4 py-2 rounded-xl border transition-colors flex items-center gap-2 ${showDeepSearch ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-zinc-900/50 border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400'}`}
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                    Фильтры
+                </button>
             </div>
+
+            {showDeepSearch && (
+                <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2">
+                    <div>
+                        <label className="block text-xs text-zinc-500 mb-1">Дата создания (От)</label>
+                        <input 
+                            type="date" 
+                            value={filters.dateFrom}
+                            onChange={(e) => { setFilters({...filters, dateFrom: e.target.value}); setPage(1); }}
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-zinc-500 mb-1">Дата создания (До)</label>
+                        <input 
+                            type="date" 
+                            value={filters.dateTo}
+                            onChange={(e) => { setFilters({...filters, dateTo: e.target.value}); setPage(1); }}
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-zinc-500 mb-1">Почтовый провайдер</label>
+                        <select 
+                            value={filters.emailProvider}
+                            onChange={(e) => { setFilters({...filters, emailProvider: e.target.value}); setPage(1); }}
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                        >
+                            <option value="">Любой</option>
+                            <option value="@gmail.com">Gmail</option>
+                            <option value="@mail.ru">Mail.ru</option>
+                            <option value="@yandex.ru">Yandex</option>
+                            <option value="@outlook.com">Outlook</option>
+                            <option value="@icloud.com">iCloud</option>
+                            <option value="@proton.me">Proton</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs text-zinc-500 mb-1">Кол-во активаций (Мин)</label>
+                        <input 
+                            type="number" 
+                            min="0"
+                            placeholder="0"
+                            value={filters.activationsMin}
+                            onChange={(e) => { setFilters({...filters, activationsMin: e.target.value}); setPage(1); }}
+                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-wrap gap-4">
                 <select 

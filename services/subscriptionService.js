@@ -194,6 +194,25 @@ export class SubscriptionService {
             where.type = filters.type;
         }
 
+        // --- NEW FILTERS ---
+        if (filters.dateFrom || filters.dateTo) {
+            where.createdAt = {};
+            if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+            if (filters.dateTo) where.createdAt.lte = new Date(new Date(filters.dateTo).setHours(23, 59, 59, 999));
+        }
+
+        if (filters.emailProvider) {
+            // Prisma 'contains' is case-insensitive usually, but good to be explicit
+            where.email = { contains: filters.emailProvider }; // e.g. "@gmail.com"
+        }
+
+        if (filters.activationsMin !== undefined || filters.activationsMax !== undefined) {
+            where.activationsCount = {};
+            if (filters.activationsMin) where.activationsCount.gte = parseInt(filters.activationsMin);
+            if (filters.activationsMax) where.activationsCount.lte = parseInt(filters.activationsMax);
+        }
+        // -------------------
+
         // Handle "expiring soon" filter (e.g. within 3 days)
         // This is complex because endDate is calculated dynamically in code, not stored in DB directly as 'endDate'
         // But we can approximate using startDate + type duration

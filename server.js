@@ -279,7 +279,7 @@ app.get('/api/stats/daily', authenticateToken, async (req, res) => {
 
 app.get('/api/subscriptions', authenticateToken, async (req, res) => {
     try {
-        const { telegramId, page, limit, search, status, type, expiring } = req.query;
+        const { telegramId, page, limit, search, status, type, expiring, dateFrom, dateTo, emailProvider, activationsMin, activationsMax } = req.query;
         
         if (telegramId) {
              const subscriptions = await SubscriptionService.getSubscriptionsByTelegramId(telegramId);
@@ -293,7 +293,12 @@ app.get('/api/subscriptions', authenticateToken, async (req, res) => {
             { 
                 status: status || 'all',
                 type: type || 'all',
-                expiring: expiring === 'true'
+                expiring: expiring === 'true',
+                dateFrom,
+                dateTo,
+                emailProvider,
+                activationsMin,
+                activationsMax
             }
         );
         res.json(result);
