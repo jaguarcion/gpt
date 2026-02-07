@@ -106,23 +106,10 @@ export class SubscriptionService {
             else if (sub.type === '3m') entry.type3m++;
         });
 
-        // Process orphan keys (assume 1m type for them)
-        orphanKeys.forEach(key => {
-             const date = formatDate(key.usedAt);
-             
-             if (!statsMap.has(date)) {
-                 statsMap.set(date, { date, total: 0, type1m: 0, type2m: 0, type3m: 0 });
-             }
-
-             const entry = statsMap.get(date);
-             entry.total++;
-             entry.type1m++; // Default assumption
-        });
-
         const chart = Array.from(statsMap.values()).slice(-30);
         const totalCompleted = await prisma.subscription.count({ where: { status: 'completed' } });
         
-        // Fix for BigInt serialization
+        // Fix for BigInt serialization (MOVE UP before orphan processing)
         const serializedCohorts = cohorts.map(c => ({
             ...c,
             total_users: Number(c.total_users),
@@ -131,14 +118,61 @@ export class SubscriptionService {
             retained_2_plus: Number(c.retained_2_plus)
         }));
 
+        // Process orphan keys (assume 1m type for them)
+        let orphanActiveCount = 0;
+        let orphanCompletedCount = 0;
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        orphanKeys.forEach(key => {
+             const usedDate = new Date(key.usedAt);
+             const dateStr = formatDate(key.usedAt);
+             
+             // Chart stats
+             if (!statsMap.has(dateStr)) {
+                 statsMap.set(dateStr, { date: dateStr, total: 0, type1m: 0, type2m: 0, type3m: 0 });
+             }
+
+             const entry = statsMap.get(dateStr);
+             entry.total++;
+             entry.type1m++; // Default assumption
+
+             // Summary stats (Active/Completed assumption based on 30 days)
+             if (usedDate > thirtyDaysAgo) {
+                 orphanActiveCount++;
+             } else {
+                 orphanCompletedCount++;
+             }
+
+             // Cohort stats fix
+             // Get YYYY-MM from usedAt
+             const monthStr = usedDate.toISOString().slice(0, 7); // "2026-02"
+             
+             // Find or create cohort entry
+             let cohort = serializedCohorts.find(c => c.month === monthStr);
+             if (!cohort) {
+                 // Note: Usually SQL returns ordered desc, so if we add new one we might break order or limit. 
+                 // But for simplicity let's find existing. If not found (e.g. old orphan), we skip or push.
+                 // Given the limit 6 in SQL, we only patch existing recent months.
+             }
+             
+             if (cohort) {
+                 cohort.total_users++;
+                 if (usedDate > thirtyDaysAgo) {
+                     cohort.active_users++;
+                 }
+                 // We can't know about retained status (re-buys) for orphans easily without email linking
+             }
+        });
+
         return {
             chart,
             cohorts: serializedCohorts,
             summary: {
-                total,
-                active,
-                completed: totalCompleted,
-                type1m,
+                total: total + orphanKeys.length,
+                active: active + orphanActiveCount,
+                completed: totalCompleted + orphanCompletedCount,
+                type1m: type1m + orphanKeys.length, // Assign all orphans to 1m for simplicity in type breakdown
                 type2m,
                 type3m
             }
