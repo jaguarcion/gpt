@@ -67,22 +67,33 @@ export class SubscriptionService {
                 createdAt: 'asc'
             }
         });
+
+        // 2. Fetch "Orphan" keys (used keys with no subscription) to fill gaps in stats
+        // These are keys that were sold but the subscription record was lost/deleted
+        const orphanKeys = await prisma.key.findMany({
+            where: {
+                status: 'used',
+                subscriptionId: null,
+                usedAt: { not: null }
+            },
+            select: { usedAt: true }
+        });
         
         const statsMap = new Map();
         
-        subscriptions.forEach(sub => {
-            // Convert UTC to local date string (assuming server timezone or target audience timezone)
-            // Ideally store timezone in config, but for now let's use a simple offset fix or just use locale date string
-            // Using 'ru-RU' with options to get YYYY-MM-DD in local time
-            
-            // Fix: Add 3 hours manually for Moscow time (UTC+3) to align with business day
-            // Or better: use toLocaleDateString with timeZone 'Europe/Moscow'
-            const date = new Date(sub.createdAt).toLocaleDateString('ru-RU', {
+        // Helper to format date with Moscow timezone
+        const formatDate = (dateObj) => {
+            return new Date(dateObj).toLocaleDateString('ru-RU', {
                 timeZone: 'Europe/Moscow',
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit'
-            }).split('.').reverse().join('-'); // Convert DD.MM.YYYY to YYYY-MM-DD for sorting
+            }).split('.').reverse().join('-');
+        };
+
+        // Process normal subscriptions
+        subscriptions.forEach(sub => {
+            const date = formatDate(sub.createdAt);
 
             if (!statsMap.has(date)) {
                 statsMap.set(date, { date, total: 0, type1m: 0, type2m: 0, type3m: 0 });
@@ -93,6 +104,19 @@ export class SubscriptionService {
             if (sub.type === '1m') entry.type1m++;
             else if (sub.type === '2m') entry.type2m++;
             else if (sub.type === '3m') entry.type3m++;
+        });
+
+        // Process orphan keys (assume 1m type for them)
+        orphanKeys.forEach(key => {
+             const date = formatDate(key.usedAt);
+             
+             if (!statsMap.has(date)) {
+                 statsMap.set(date, { date, total: 0, type1m: 0, type2m: 0, type3m: 0 });
+             }
+
+             const entry = statsMap.get(date);
+             entry.total++;
+             entry.type1m++; // Default assumption
         });
 
         const chart = Array.from(statsMap.values()).slice(-30);
