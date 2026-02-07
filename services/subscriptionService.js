@@ -71,7 +71,19 @@ export class SubscriptionService {
         const statsMap = new Map();
         
         subscriptions.forEach(sub => {
-            const date = sub.createdAt.toISOString().split('T')[0];
+            // Convert UTC to local date string (assuming server timezone or target audience timezone)
+            // Ideally store timezone in config, but for now let's use a simple offset fix or just use locale date string
+            // Using 'ru-RU' with options to get YYYY-MM-DD in local time
+            
+            // Fix: Add 3 hours manually for Moscow time (UTC+3) to align with business day
+            // Or better: use toLocaleDateString with timeZone 'Europe/Moscow'
+            const date = new Date(sub.createdAt).toLocaleDateString('ru-RU', {
+                timeZone: 'Europe/Moscow',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).split('.').reverse().join('-'); // Convert DD.MM.YYYY to YYYY-MM-DD for sorting
+
             if (!statsMap.has(date)) {
                 statsMap.set(date, { date, total: 0, type1m: 0, type2m: 0, type3m: 0 });
             }
