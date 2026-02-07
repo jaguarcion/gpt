@@ -22,11 +22,106 @@ if (!API_TOKEN) {
     process.exit(1);
 }
 
+// ===================== RATE LIMIT TRACKING =====================
+const rateLimitTracker = {
+    requests: new Map(),    // IP -> { count, firstSeen, lastSeen, paths: Map<path, count> }
+    blocked: [],            // Array of { ip, time, path }
+    totalRequests: 0,
+    totalBlocked: 0,
+    startTime: Date.now(),
+
+    track(ip, path) {
+        this.totalRequests++;
+        if (!this.requests.has(ip)) {
+            this.requests.set(ip, { count: 0, firstSeen: Date.now(), lastSeen: Date.now(), paths: new Map() });
+        }
+        const entry = this.requests.get(ip);
+        entry.count++;
+        entry.lastSeen = Date.now();
+        entry.paths.set(path, (entry.paths.get(path) || 0) + 1);
+    },
+
+    trackBlocked(ip, path) {
+        this.totalBlocked++;
+        this.blocked.push({ ip, time: Date.now(), path });
+        // Keep only last 100 blocks
+        if (this.blocked.length > 100) this.blocked = this.blocked.slice(-100);
+    },
+
+    getStats() {
+        const now = Date.now();
+        const uptimeMs = now - this.startTime;
+
+        // Top IPs by request count
+        const topIPs = Array.from(this.requests.entries())
+            .map(([ip, data]) => ({
+                ip,
+                count: data.count,
+                firstSeen: new Date(data.firstSeen).toISOString(),
+                lastSeen: new Date(data.lastSeen).toISOString(),
+                topPaths: Array.from(data.paths.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+                    .map(([path, count]) => ({ path, count }))
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 20);
+
+        // Requests per minute (approximate)
+        const rpm = uptimeMs > 0 ? Math.round((this.totalRequests / (uptimeMs / 60000)) * 100) / 100 : 0;
+
+        // Recent blocks
+        const recentBlocks = this.blocked
+            .slice(-20)
+            .reverse()
+            .map(b => ({ ...b, time: new Date(b.time).toISOString() }));
+
+        return {
+            totalRequests: this.totalRequests,
+            totalBlocked: this.totalBlocked,
+            uniqueIPs: this.requests.size,
+            requestsPerMinute: rpm,
+            uptimeMinutes: Math.round(uptimeMs / 60000),
+            topIPs,
+            recentBlocks,
+            config: {
+                windowMs: 15 * 60 * 1000,
+                maxRequests: 1000
+            }
+        };
+    },
+
+    // Cleanup old entries every hour
+    cleanup() {
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+        for (const [ip, data] of this.requests.entries()) {
+            if (data.lastSeen < oneHourAgo) {
+                this.requests.delete(ip);
+            }
+        }
+    }
+};
+
+// Cleanup old tracking data every hour
+setInterval(() => rateLimitTracker.cleanup(), 60 * 60 * 1000);
+
+// Request tracking middleware (before rate limiter)
+app.use((req, res, next) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    rateLimitTracker.track(String(ip).split(',')[0].trim(), req.path);
+    next();
+});
+
 // Security: Rate Limiter
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // Limit each IP to 1000 requests per windowMs
-    message: { error: 'Too many requests, please try again later.' }
+    message: { error: 'Too many requests, please try again later.' },
+    handler: (req, res) => {
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+        rateLimitTracker.trackBlocked(String(ip).split(',')[0].trim(), req.path);
+        res.status(429).json({ error: 'Too many requests, please try again later.' });
+    }
 });
 
 // Security: CORS Configuration
@@ -741,6 +836,16 @@ app.get('/api/health', authenticateToken, async (req, res) => {
         });
     } catch (e) {
         console.error('Health Check Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ===================== RATE LIMIT STATS =====================
+app.get('/api/rate-limit/stats', authenticateToken, async (req, res) => {
+    try {
+        res.json(rateLimitTracker.getStats());
+    } catch (e) {
+        console.error('Rate Limit Stats Error:', e);
         res.status(500).json({ error: e.message });
     }
 });

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
+import { SkeletonLogs } from '../components/Skeleton';
 
 export interface LogEntry {
     id: number;
@@ -93,7 +94,7 @@ export function ActivityLogs() {
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-sm">
                         {loading && logs.length === 0 ? (
-                            <div className="text-zinc-500 text-center py-4">Loading logs...</div>
+                            <SkeletonLogs rows={8} />
                         ) : logs.length === 0 ? (
                             <div className="text-zinc-500 text-center py-4">No activity recorded yet.</div>
                         ) : (

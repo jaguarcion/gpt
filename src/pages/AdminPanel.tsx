@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
+import { SkeletonCards, SkeletonTable } from '../components/Skeleton';
+import { TableDensityToggle } from '../components/TableDensityToggle';
+import { useTableDensity } from '../hooks/useTableDensity';
+import { useToast } from '../components/Toast';
 
 export function AdminPanel() {
   const [token, setToken] = useState('');
@@ -28,6 +32,8 @@ export function AdminPanel() {
       { key: 'actions', label: 'Действия', required: true },
   ];
   const { visible: visibleCols, toggle: toggleCol, isVisible: isColVisible, reset: resetCols } = useColumnVisibility('keys', keyColumns);
+  const { density, toggle: toggleDensity, cellPadding, headerPadding, fontSize } = useTableDensity();
+  const toast = useToast();
 
   const handleLogin = async () => {
     if (!token) return;
@@ -98,10 +104,10 @@ export function AdminPanel() {
 
       await addKey(codes);
       setNewKeyCodes('');
-      setMessage({ text: `Успешно добавлено ключей: ${codes.length}`, type: 'success' });
+      toast.success(`Успешно добавлено ключей: ${codes.length}`);
       loadData();
     } catch (e: any) {
-      setMessage({ text: e.response?.data?.error || e.message, type: 'error' });
+      toast.error(e.response?.data?.error || e.message);
     }
   };
   
@@ -109,9 +115,10 @@ export function AdminPanel() {
       if (!window.confirm('Вы уверены, что хотите удалить этот ключ?')) return;
       try {
           await deleteKey(id);
-          loadData(); // Reload list
+          toast.success('Ключ удалён');
+          loadData();
       } catch (e: any) {
-          setMessage({ text: 'Ошибка при удалении', type: 'error' });
+          toast.error('Ошибка при удалении');
       }
   };
 
@@ -151,7 +158,7 @@ export function AdminPanel() {
         document.body.removeChild(link);
     } catch (e) {
         console.error('Export error:', e);
-        setMessage({ text: 'Ошибка при экспорте', type: 'error' });
+        toast.error('Ошибка при экспорте');
     }
   };
 
@@ -161,9 +168,12 @@ export function AdminPanel() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center">
-        <div className="text-zinc-500">Загрузка...</div>
-      </div>
+      <Layout>
+        <div className="max-w-6xl mx-auto space-y-8">
+          <SkeletonCards count={3} />
+          <SkeletonTable rows={8} cols={5} />
+        </div>
+      </Layout>
     );
   }
 
@@ -227,7 +237,6 @@ export function AdminPanel() {
               </button>
             </div>
           </div>
-          {message && <div className={`text-sm ${message.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>{message.text}</div>}
         </div>
 
         {/* Keys List */}
@@ -253,6 +262,7 @@ export function AdminPanel() {
                         Used
                     </button>
                 </div>
+                <TableDensityToggle density={density} onToggle={toggleDensity} />
                 <ColumnSelector columns={keyColumns} visible={visibleCols} onToggle={toggleCol} onReset={resetCols} />
                 <button 
                     onClick={handleExportCSV}
@@ -264,22 +274,22 @@ export function AdminPanel() {
 
             <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <div className="max-h-[70vh] overflow-y-auto">
-            <table className="w-full text-left text-sm">
-                <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs sticky top-0 z-10">
+            <table className={`w-full text-left ${fontSize}`}>
+                <thead className={`bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs sticky top-0 z-10`}>
                 <tr>
-                    {isColVisible('id') && <th className="px-6 py-3">ID</th>}
-                    {isColVisible('code') && <th className="px-6 py-3">Code</th>}
-                    {isColVisible('status') && <th className="px-6 py-3">Status</th>}
-                    {isColVisible('usedBy') && <th className="px-6 py-3">Used By</th>}
-                    {isColVisible('createdAt') && <th className="px-6 py-3">Created At</th>}
-                    {isColVisible('actions') && <th className="px-6 py-3"></th>}
+                    {isColVisible('id') && <th className={headerPadding}>ID</th>}
+                    {isColVisible('code') && <th className={headerPadding}>Code</th>}
+                    {isColVisible('status') && <th className={headerPadding}>Status</th>}
+                    {isColVisible('usedBy') && <th className={headerPadding}>Used By</th>}
+                    {isColVisible('createdAt') && <th className={headerPadding}>Created At</th>}
+                    {isColVisible('actions') && <th className={headerPadding}></th>}
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {keys.map((key) => (
                     <tr key={key.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                    {isColVisible('id') && <td className="px-6 py-4 font-mono text-zinc-500">{key.id}</td>}
-                    {isColVisible('code') && <td className="px-6 py-4 font-mono text-zinc-700 dark:text-zinc-300">
+                    {isColVisible('id') && <td className={`${cellPadding} font-mono text-zinc-500`}>{key.id}</td>}
+                    {isColVisible('code') && <td className={`${cellPadding} font-mono text-zinc-700 dark:text-zinc-300`}>
                         <span 
                         onClick={() => copyToClipboard(key.code)} 
                         className="cursor-pointer hover:text-blue-500 dark:hover:text-white"
@@ -288,14 +298,14 @@ export function AdminPanel() {
                         {key.code}
                         </span>
                     </td>}
-                    {isColVisible('status') && <td className="px-6 py-4">
+                    {isColVisible('status') && <td className={cellPadding}>
                         <span className={`px-2 py-1 rounded text-xs ${key.status === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'}`}>
                         {key.status}
                         </span>
                     </td>}
-                    {isColVisible('usedBy') && <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">{key.usedByEmail || '-'}</td>}
-                    {isColVisible('createdAt') && <td className="px-6 py-4 text-zinc-500">{new Date(key.createdAt).toLocaleDateString()}</td>}
-                    {isColVisible('actions') && <td className="px-6 py-4 text-right">
+                    {isColVisible('usedBy') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>{key.usedByEmail || '-'}</td>}
+                    {isColVisible('createdAt') && <td className={`${cellPadding} text-zinc-500`}>{new Date(key.createdAt).toLocaleDateString()}</td>}
+                    {isColVisible('actions') && <td className={`${cellPadding} text-right`}>
                         <button 
                             onClick={() => handleDeleteKey(key.id)}
                             className="text-zinc-400 hover:text-red-500 transition-colors"

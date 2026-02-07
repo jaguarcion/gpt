@@ -126,3 +126,9 @@ export const getHealth = async () => {
     const response = await adminApi.get('/health');
     return response.data;
 };
+
+// Rate Limit Stats API
+export const getRateLimitStats = async () => {
+    const response = await adminApi.get('/rate-limit/stats');
+    return response.data;
+};

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { getHealth, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
-import { Server, Database, HardDrive, Clock, Cpu, MemoryStick, Activity, RefreshCw, FileText, Shield } from 'lucide-react';
+import { Server, Database, HardDrive, Clock, Cpu, MemoryStick, Activity, RefreshCw, Key, Users, FileText, Shield } from 'lucide-react';
+import { SkeletonHealthPage } from '../components/Skeleton';
 
 export function Health() {
     const [health, setHealth] = useState<any>(null);
@@ -40,10 +41,7 @@ export function Health() {
     if (loading) {
         return (
             <Layout>
-                <div className="flex items-center justify-center py-20 text-zinc-500">
-                    <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                    Загрузка данных...
-                </div>
+                <SkeletonHealthPage />
             </Layout>
         );
     }

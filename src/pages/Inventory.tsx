@@ -4,6 +4,8 @@ import { Layout } from '../components/Layout';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../components/ThemeProvider';
+import { SkeletonCards4, SkeletonChart } from '../components/Skeleton';
+import { FullscreenChart } from '../components/FullscreenChart';
 
 export function Inventory() {
     const [stats, setStats] = useState<any>(null);
@@ -43,7 +45,14 @@ export function Inventory() {
         }
     };
 
-    if (loading) return <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center text-zinc-500">Загрузка...</div>;
+    if (loading) return (
+        <Layout>
+            <div className="max-w-6xl mx-auto space-y-8">
+                <SkeletonCards4 count={4} />
+                <SkeletonChart />
+            </div>
+        </Layout>
+    );
     if (!stats) return null;
 
     const chartGridColor = isDark ? "#27272a" : "#e4e4e7";
@@ -100,7 +109,7 @@ export function Inventory() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Burn Rate Chart */}
                     <div className="lg:col-span-2 bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-6">Расход ключей (30 дней)</h3>
+                        <FullscreenChart title="Расход ключей (30 дней)">
                         <div className="h-[300px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={stats.chart}>
@@ -130,6 +139,7 @@ export function Inventory() {
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
+                        </FullscreenChart>
                     </div>
 
                     {/* Restock Calculator */}

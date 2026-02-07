@@ -5,6 +5,10 @@ import { EditUserModal } from '../components/EditUserModal';
 import { UserHistoryModal } from '../components/UserHistoryModal';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
+import { SkeletonTable } from '../components/Skeleton';
+import { TableDensityToggle } from '../components/TableDensityToggle';
+import { useTableDensity } from '../hooks/useTableDensity';
+import { useToast } from '../components/Toast';
 
 interface Key {
   id: number;
@@ -65,6 +69,8 @@ export function Users() {
       { key: 'actions', label: 'Действия', required: true },
   ];
   const { visible: visibleCols, toggle: toggleCol, isVisible: isColVisible, reset: resetCols } = useColumnVisibility('users', userColumns);
+  const { density, toggle: toggleDensity, cellPadding, headerPadding, fontSize } = useTableDensity();
+  const toast = useToast();
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
@@ -105,10 +111,10 @@ export function Users() {
       
       try {
           await manualActivateSubscription(id);
-          alert('Успешно активировано!');
+          toast.success('Успешно активировано!');
           loadData();
       } catch (e: any) {
-          alert(`Ошибка: ${e.response?.data?.error || e.message}`);
+          toast.error(`Ошибка: ${e.response?.data?.error || e.message}`);
       }
   };
 
@@ -117,9 +123,10 @@ export function Users() {
       try {
           await updateSubscription(editingUser.id, data);
           setEditingUser(null);
+          toast.success('Пользователь обновлён');
           loadData();
       } catch (e: any) {
-          alert('Ошибка обновления: ' + (e.response?.data?.error || e.message));
+          toast.error('Ошибка обновления: ' + (e.response?.data?.error || e.message));
       }
   };
 
@@ -127,9 +134,10 @@ export function Users() {
       if (!window.confirm('Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.')) return;
       try {
           await deleteSubscription(id);
+          toast.success('Пользователь удалён');
           loadData();
       } catch (e: any) {
-          alert('Ошибка удаления: ' + (e.response?.data?.error || e.message));
+          toast.error('Ошибка удаления: ' + (e.response?.data?.error || e.message));
       }
   };
 
@@ -144,7 +152,7 @@ export function Users() {
           setSelectedUsers([]);
           loadData();
       } catch (e: any) {
-          alert('Ошибка массового удаления: ' + (e.message));
+          toast.error('Ошибка массового удаления: ' + (e.message));
       }
   };
 
@@ -218,6 +226,7 @@ export function Users() {
                     Удалить ({selectedUsers.length})
                 </button>
             )}
+            <TableDensityToggle density={density} onToggle={toggleDensity} />
             <ColumnSelector columns={userColumns} visible={visibleCols} onToggle={toggleCol} onReset={resetCols} />
             <button 
                 onClick={handleExportCSV}
@@ -344,7 +353,7 @@ export function Users() {
         </div>
 
         {loading ? (
-            <div className="text-center text-zinc-500 py-10">Загрузка...</div>
+            <SkeletonTable rows={10} cols={7} />
         ) : (
             <>
             {/* Mobile View: Cards */}
@@ -431,10 +440,10 @@ export function Users() {
             {/* Desktop View: Table */}
             <div className="hidden md:block bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <div className="max-h-[70vh] overflow-y-auto">
-            <table className="w-full text-left text-sm">
+            <table className={`w-full text-left ${fontSize}`}>
                 <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs sticky top-0 z-10">
                 <tr>
-                    {isColVisible('checkbox') && <th className="px-6 py-3 w-4">
+                    {isColVisible('checkbox') && <th className={`${headerPadding} w-4`}>
                         <input 
                             type="checkbox" 
                             checked={selectedUsers.length > 0 && selectedUsers.length === subscriptions.length}
@@ -442,14 +451,14 @@ export function Users() {
                             className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </th>}
-                    {isColVisible('email') && <th className="px-6 py-3">Email</th>}
-                    {isColVisible('type') && <th className="px-6 py-3">Тип</th>}
-                    {isColVisible('note') && <th className="px-6 py-3">Заметка</th>}
-                    {isColVisible('status') && <th className="px-6 py-3">Статус</th>}
-                    {isColVisible('startDate') && <th className="px-6 py-3">Дата старта</th>}
-                    {isColVisible('endDate') && <th className="px-6 py-3">Дата окончания</th>}
-                    {isColVisible('keys') && <th className="px-6 py-3">Ключи</th>}
-                    {isColVisible('actions') && <th className="px-6 py-3 text-right">Действия</th>}
+                    {isColVisible('email') && <th className={headerPadding}>Email</th>}
+                    {isColVisible('type') && <th className={headerPadding}>Тип</th>}
+                    {isColVisible('note') && <th className={headerPadding}>Заметка</th>}
+                    {isColVisible('status') && <th className={headerPadding}>Статус</th>}
+                    {isColVisible('startDate') && <th className={headerPadding}>Дата старта</th>}
+                    {isColVisible('endDate') && <th className={headerPadding}>Дата окончания</th>}
+                    {isColVisible('keys') && <th className={headerPadding}>Ключи</th>}
+                    {isColVisible('actions') && <th className={`${headerPadding} text-right`}>Действия</th>}
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -463,7 +472,7 @@ export function Users() {
 
                     return (
                     <tr key={sub.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
-                    {isColVisible('checkbox') && <td className="px-6 py-4">
+                    {isColVisible('checkbox') && <td className={cellPadding}>
                         <input 
                             type="checkbox" 
                             checked={selectedUsers.includes(sub.id)}
@@ -471,8 +480,8 @@ export function Users() {
                             className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </td>}
-                    {isColVisible('email') && <td className="px-6 py-4 font-medium text-zinc-900 dark:text-white">{sub.email}</td>}
-                    {isColVisible('type') && <td className="px-6 py-4">
+                    {isColVisible('email') && <td className={`${cellPadding} font-medium text-zinc-900 dark:text-white`}>{sub.email}</td>}
+                    {isColVisible('type') && <td className={cellPadding}>
                         <span className={`px-2 py-1 rounded text-xs ${
                             sub.type === '3m' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 
                             sub.type === '2m' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
@@ -481,7 +490,7 @@ export function Users() {
                         {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
                         </span>
                     </td>}
-                    {isColVisible('note') && <td className="px-6 py-4">
+                    {isColVisible('note') && <td className={cellPadding}>
                         {sub.note ? (
                             <div className="group/note relative">
                                 <svg className="w-4 h-4 text-yellow-500 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -493,7 +502,7 @@ export function Users() {
                             <span className="text-zinc-400 dark:text-zinc-600">-</span>
                         )}
                     </td>}
-                    {isColVisible('status') && <td className="px-6 py-4">
+                    {isColVisible('status') && <td className={cellPadding}>
                         <span className={`px-2 py-1 rounded text-xs ${
                             displayStatus === 'active' ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 
                             displayStatus === 'completed' ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300' : 'bg-red-500/10 text-red-600 dark:text-red-400'
@@ -501,13 +510,13 @@ export function Users() {
                         {displayStatus}
                         </span>
                     </td>}
-                    {isColVisible('startDate') && <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
+                    {isColVisible('startDate') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>
                         {new Date(sub.startDate).toLocaleDateString()}
                     </td>}
-                    {isColVisible('endDate') && <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
+                    {isColVisible('endDate') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>
                         {endDate.toLocaleDateString()}
                     </td>}
-                    {isColVisible('keys') && <td className="px-6 py-4">
+                    {isColVisible('keys') && <td className={cellPadding}>
                         <div className="flex flex-col gap-1">
                             {sub.keys.map(k => (
                                 <span 
@@ -522,7 +531,7 @@ export function Users() {
                             {sub.keys.length === 0 && <span className="text-zinc-400 dark:text-zinc-600">-</span>}
                         </div>
                     </td>}
-                    {isColVisible('actions') && <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
+                    {isColVisible('actions') && <td className={`${cellPadding} text-right flex justify-end gap-2 items-center`}>
                         <button 
                             onClick={() => setViewingHistoryEmail(sub.email)}
                             className="text-zinc-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1"

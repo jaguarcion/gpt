@@ -20,6 +20,7 @@ export function Layout({ children }: LayoutProps) {
         { path: '/admin/backups', label: 'Бэкапы' },
         { path: '/admin/inventory', label: 'Склад' },
         { path: '/admin/health', label: 'Система' },
+        { path: '/admin/rate-limit', label: 'Rate Limit' },
     ];
 
     return (

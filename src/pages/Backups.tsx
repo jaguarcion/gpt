@@ -1,8 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { getBackups, createBackup, deleteBackup, downloadBackupUrl, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
+import { SkeletonTable } from '../components/Skeleton';
+import { useToast } from '../components/Toast';
 
 interface Backup {
     name: string;
@@ -16,6 +17,7 @@ export function Backups() {
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const toast = useToast();
 
     useEffect(() => {
         const token = localStorage.getItem('adminToken');
@@ -43,9 +45,10 @@ export function Backups() {
         setCreating(true);
         try {
             await createBackup();
+            toast.success('Бэкап успешно создан');
             await loadBackups();
         } catch (e: any) {
-            alert('Ошибка создания бэкапа: ' + e.message);
+            toast.error('Ошибка создания бэкапа: ' + e.message);
         } finally {
             setCreating(false);
         }
@@ -55,9 +58,10 @@ export function Backups() {
         if (!window.confirm(`Удалить бэкап ${filename}?`)) return;
         try {
             await deleteBackup(filename);
+            toast.success('Бэкап удалён');
             setBackups(prev => prev.filter(b => b.name !== filename));
         } catch (e: any) {
-            alert('Ошибка удаления: ' + e.message);
+            toast.error('Ошибка удаления: ' + e.message);
         }
     };
 
@@ -85,7 +89,7 @@ export function Backups() {
             a.click();
             a.remove();
         })
-        .catch(err => alert('Download failed: ' + err.message));
+        .catch(err => toast.error('Ошибка скачивания: ' + err.message));
     };
 
     const formatSize = (bytes: number) => {
@@ -117,7 +121,7 @@ export function Backups() {
                 )}
 
                 {loading ? (
-                    <div className="text-center text-zinc-500 py-10">Загрузка...</div>
+                    <SkeletonTable rows={5} cols={4} />
                 ) : (
                     <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                         <table className="w-full text-left text-sm">

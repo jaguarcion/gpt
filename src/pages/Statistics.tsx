@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { getDailyStats, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
-import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../components/ThemeProvider';
+import { SkeletonCards4, SkeletonChart, SkeletonTable } from '../components/Skeleton';
+import { FullscreenChart } from '../components/FullscreenChart';
 
 export function Statistics() {
     const [stats, setStats] = useState<any>(null);
@@ -44,7 +45,16 @@ export function Statistics() {
     };
 
     if (loading) {
-        return <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center text-zinc-500">Загрузка...</div>;
+        return (
+            <Layout>
+                <div className="max-w-6xl mx-auto space-y-8">
+                    <SkeletonCards4 count={2} />
+                    <SkeletonChart />
+                    <SkeletonChart />
+                    <SkeletonTable rows={5} cols={5} />
+                </div>
+            </Layout>
+        );
     }
 
     if (!stats) return null;
@@ -94,75 +104,75 @@ export function Statistics() {
                 {/* Chart Section */}
 
                 <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                    <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-6">Подключения за последние 30 дней</h3>
-                    
-                    <div className="h-[400px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                                data={stats.chart}
-                                margin={{
-                                    top: 5,
-                                    right: 30,
-                                    left: 20,
-                                    bottom: 5,
-                                }}
-                            >
-                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                <XAxis 
-                                    dataKey="date" 
-                                    stroke={chartTextColor} 
-                                    tick={{ fill: chartTextColor, fontSize: 12 }}
-                                    tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}
-                                    minTickGap={30}
-                                />
-                                <YAxis 
-                                    stroke={chartTextColor} 
-                                    tick={{ fill: chartTextColor, fontSize: 12 }}
-                                    allowDecimals={false}
-                                />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="total" 
-                                    name="Всего" 
-                                    stroke={chartLineColor} 
-                                    strokeWidth={2}
-                                    dot={{ fill: chartLineColor, r: 4 }}
-                                    activeDot={{ r: 6 }}
-                                />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="type1m" 
-                                    name="1 Месяц" 
-                                    stroke="#3b82f6" 
-                                    strokeWidth={2}
-                                    dot={{ fill: '#3b82f6', r: 4 }}
-                                />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="type2m" 
-                                    name="2 Месяца" 
-                                    stroke="#10b981" 
-                                    strokeWidth={2}
-                                    dot={{ fill: '#10b981', r: 4 }}
-                                />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="type3m" 
-                                    name="3 Месяца" 
-                                    stroke="#a855f7" 
-                                    strokeWidth={2}
-                                    dot={{ fill: '#a855f7', r: 4 }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <FullscreenChart title="Подключения за последние 30 дней">
+                        <div className="h-[400px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart
+                                    data={stats.chart}
+                                    margin={{
+                                        top: 5,
+                                        right: 30,
+                                        left: 20,
+                                        bottom: 5,
+                                    }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                                    <XAxis 
+                                        dataKey="date" 
+                                        stroke={chartTextColor} 
+                                        tick={{ fill: chartTextColor, fontSize: 12 }}
+                                        tickFormatter={(value) => new Date(value).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })}
+                                        minTickGap={30}
+                                    />
+                                    <YAxis 
+                                        stroke={chartTextColor} 
+                                        tick={{ fill: chartTextColor, fontSize: 12 }}
+                                        allowDecimals={false}
+                                    />
+                                    <Tooltip content={<CustomTooltip />} />
+                                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="total" 
+                                        name="Всего" 
+                                        stroke={chartLineColor} 
+                                        strokeWidth={2}
+                                        dot={{ fill: chartLineColor, r: 4 }}
+                                        activeDot={{ r: 6 }}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="type1m" 
+                                        name="1 Месяц" 
+                                        stroke="#3b82f6" 
+                                        strokeWidth={2}
+                                        dot={{ fill: '#3b82f6', r: 4 }}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="type2m" 
+                                        name="2 Месяца" 
+                                        stroke="#10b981" 
+                                        strokeWidth={2}
+                                        dot={{ fill: '#10b981', r: 4 }}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="type3m" 
+                                        name="3 Месяца" 
+                                        stroke="#a855f7" 
+                                        strokeWidth={2}
+                                        dot={{ fill: '#a855f7', r: 4 }}
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </FullscreenChart>
                 </div>
 
                 {/* Cohort Analysis */}
                 <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                    <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-2">Статистика продлений</h3>
+                    <FullscreenChart title="Статистика продлений">
                     <p className="text-sm text-zinc-500 mb-6">Показывает динамику удержания пользователей по месяцам регистрации.</p>
                     
                     <div className="h-[300px] w-full">
@@ -203,6 +213,7 @@ export function Statistics() {
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
+                    </FullscreenChart>
                 </div>
 
                 {/* Table Section */}
