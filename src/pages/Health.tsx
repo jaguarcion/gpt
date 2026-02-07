@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getHealth, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
-import { Server, Database, HardDrive, Clock, Cpu, MemoryStick, Activity, RefreshCw, Key, Users, FileText, Shield } from 'lucide-react';
+import { Server, Database, HardDrive, Clock, Cpu, MemoryStick, Activity, RefreshCw, FileText, Shield } from 'lucide-react';
 
 export function Health() {
     const [health, setHealth] = useState<any>(null);
@@ -226,14 +226,6 @@ export function Health() {
                     </div>
                 </div>
 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <MiniCard label="Ключей на складе" value={health.inventory.activeKeys} color="text-green-600 dark:text-green-500" />
-                    <MiniCard label="Ключей использовано" value={health.inventory.usedKeys} color="text-zinc-600 dark:text-zinc-400" />
-                    <MiniCard label="Всего ключей" value={health.inventory.totalKeys} color="text-zinc-900 dark:text-white" />
-                    <MiniCard label="Активных подписок" value={health.subscriptions.active} color="text-blue-600 dark:text-blue-500" />
-                </div>
-
                 {/* Cron Jobs */}
                 <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
                     <div className="flex items-center gap-2 mb-4">
@@ -331,11 +323,3 @@ function RecordRow({ icon, label, count }: { icon: React.ReactNode; label: strin
     );
 }
 
-function MiniCard({ label, value, color }: { label: string; value: number; color: string }) {
-    return (
-        <div className="bg-white dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 text-center">
-            <div className="text-xs text-zinc-500 mb-1">{label}</div>
-            <div className={`text-2xl font-bold ${color}`}>{value}</div>
-        </div>
-    );
-}
