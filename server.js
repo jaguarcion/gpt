@@ -840,6 +840,138 @@ app.get('/api/health', authenticateToken, async (req, res) => {
     }
 });
 
+// ===================== SLA STATS =====================
+app.get('/api/sla', authenticateToken, async (req, res) => {
+    try {
+        const now = new Date();
+        const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+        // Get activation and error logs
+        const allLogs = await prisma.activityLog.findMany({
+            where: { createdAt: { gte: monthAgo }, action: { in: ['ACTIVATION', 'RENEWAL', 'MANUAL_ACTIVATION', 'ERROR'] } },
+            select: { action: true, createdAt: true }
+        });
+
+        const calcSLA = (logs) => {
+            const successes = logs.filter(l => l.action !== 'ERROR').length;
+            const errors = logs.filter(l => l.action === 'ERROR').length;
+            const total = successes + errors;
+            return { successes, errors, total, rate: total > 0 ? Math.round((successes / total) * 10000) / 100 : 100 };
+        };
+
+        const todayLogs = allLogs.filter(l => new Date(l.createdAt) >= todayStart);
+        const weekLogs = allLogs.filter(l => new Date(l.createdAt) >= weekAgo);
+
+        // Hourly breakdown for chart (last 24 hours)
+        const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const hourlyLogs = allLogs.filter(l => new Date(l.createdAt) >= h24ago);
+        const hourlyChart = [];
+        for (let i = 23; i >= 0; i--) {
+            const hourStart = new Date(now.getTime() - i * 60 * 60 * 1000);
+            hourStart.setMinutes(0, 0, 0);
+            const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+            const hourLogs = hourlyLogs.filter(l => { const d = new Date(l.createdAt); return d >= hourStart && d < hourEnd; });
+            const s = hourLogs.filter(l => l.action !== 'ERROR').length;
+            const e = hourLogs.filter(l => l.action === 'ERROR').length;
+            hourlyChart.push({ hour: hourStart.toISOString(), successes: s, errors: e });
+        }
+
+        res.json({
+            today: calcSLA(todayLogs),
+            week: calcSLA(weekLogs),
+            month: calcSLA(allLogs),
+            hourlyChart
+        });
+    } catch (e) {
+        console.error('SLA Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ===================== RENEWAL CALENDAR =====================
+app.get('/api/calendar', authenticateToken, async (req, res) => {
+    try {
+        // Get all subscriptions with nextActivationDate
+        const subs = await prisma.subscription.findMany({
+            where: { status: 'active', nextActivationDate: { not: null } },
+            select: { id: true, email: true, type: true, nextActivationDate: true, activationsCount: true }
+        });
+
+        // Also get subscriptions by their endDate (startDate + duration)
+        const activeSubs = await prisma.subscription.findMany({
+            where: { status: 'active' },
+            select: { id: true, email: true, type: true, startDate: true, activationsCount: true }
+        });
+
+        // Build calendar events
+        const events = [];
+
+        // Scheduled renewals
+        subs.forEach(sub => {
+            if (sub.nextActivationDate) {
+                events.push({
+                    date: sub.nextActivationDate.toISOString().split('T')[0],
+                    type: 'renewal',
+                    email: sub.email,
+                    subType: sub.type,
+                    round: sub.activationsCount + 1
+                });
+            }
+        });
+
+        // Expiration dates
+        activeSubs.forEach(sub => {
+            const start = new Date(sub.startDate);
+            const months = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
+            const endDate = new Date(start);
+            endDate.setMonth(endDate.getMonth() + months);
+            events.push({
+                date: endDate.toISOString().split('T')[0],
+                type: 'expiration',
+                email: sub.email,
+                subType: sub.type
+            });
+        });
+
+        // Group by date
+        const calendarMap = {};
+        events.forEach(ev => {
+            if (!calendarMap[ev.date]) {
+                calendarMap[ev.date] = { date: ev.date, renewals: 0, expirations: 0, events: [] };
+            }
+            if (ev.type === 'renewal') calendarMap[ev.date].renewals++;
+            else calendarMap[ev.date].expirations++;
+            calendarMap[ev.date].events.push(ev);
+        });
+
+        const calendar = Object.values(calendarMap).sort((a, b) => a.date.localeCompare(b.date));
+        res.json(calendar);
+    } catch (e) {
+        console.error('Calendar Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ===================== TODAY WIDGET =====================
+app.get('/api/today', authenticateToken, async (req, res) => {
+    try {
+        const now = new Date();
+        const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+
+        const [activations, errors, newSubs] = await Promise.all([
+            prisma.activityLog.count({ where: { createdAt: { gte: todayStart }, action: { in: ['ACTIVATION', 'RENEWAL', 'MANUAL_ACTIVATION'] } } }),
+            prisma.activityLog.count({ where: { createdAt: { gte: todayStart }, action: 'ERROR' } }),
+            prisma.subscription.count({ where: { createdAt: { gte: todayStart } } })
+        ]);
+
+        res.json({ activations, errors, newSubs });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ===================== RATE LIMIT STATS =====================
 app.get('/api/rate-limit/stats', authenticateToken, async (req, res) => {
     try {

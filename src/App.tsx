@@ -9,6 +9,9 @@ import { Backups } from './pages/Backups';
 import { Inventory } from './pages/Inventory';
 import { Health } from './pages/Health';
 import { RateLimit } from './pages/RateLimit';
+import { SLA } from './pages/SLA';
+import { Calendar } from './pages/Calendar';
+import { Changelog } from './pages/Changelog';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ToastProvider } from './components/Toast';
 
@@ -27,6 +30,9 @@ function App() {
             <Route path="/admin/inventory" element={<Inventory />} />
             <Route path="/admin/health" element={<Health />} />
             <Route path="/admin/rate-limit" element={<RateLimit />} />
+            <Route path="/admin/sla" element={<SLA />} />
+            <Route path="/admin/calendar" element={<Calendar />} />
+            <Route path="/admin/changelog" element={<Changelog />} />
           </Routes>
         </BrowserRouter>
       </ToastProvider>

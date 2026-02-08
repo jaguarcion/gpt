@@ -132,3 +132,21 @@ export const getRateLimitStats = async () => {
     const response = await adminApi.get('/rate-limit/stats');
     return response.data;
 };
+
+// SLA API
+export const getSLAStats = async () => {
+    const response = await adminApi.get('/sla');
+    return response.data;
+};
+
+// Calendar API
+export const getCalendar = async () => {
+    const response = await adminApi.get('/calendar');
+    return response.data;
+};
+
+// Today Widget API
+export const getTodayStats = async () => {
+    const response = await adminApi.get('/today');
+    return response.data;
+};

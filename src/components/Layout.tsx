@@ -3,6 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ModeToggle } from './ModeToggle';
 import { ApiStatusWidget } from './ApiStatusWidget';
 import { NotificationCenter } from './NotificationCenter';
+import { TodayWidget } from './TodayWidget';
+import { PageTransition } from './PageTransition';
+import { getChangelogBadge } from '../pages/Changelog';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -21,7 +24,12 @@ export function Layout({ children }: LayoutProps) {
         { path: '/admin/inventory', label: 'Склад' },
         { path: '/admin/health', label: 'Система' },
         { path: '/admin/rate-limit', label: 'Rate Limit' },
+        { path: '/admin/sla', label: 'SLA' },
+        { path: '/admin/calendar', label: 'Календарь' },
+        { path: '/admin/changelog', label: 'Changelog', badge: getChangelogBadge() },
     ];
+
+    type NavItem = { path: string; label: string; badge?: boolean };
 
     return (
         <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 flex flex-col">
@@ -39,19 +47,23 @@ export function Layout({ children }: LayoutProps) {
                                 <Link
                                     key={item.path}
                                     to={item.path}
-                                    className={`px-3 py-2 rounded-md text-sm transition-colors ${
+                                    className={`relative px-3 py-2 rounded-md text-sm transition-colors ${
                                         location.pathname === item.path 
                                             ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium' 
                                             : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
                                     }`}
                                 >
                                     {item.label}
+                                    {(item as NavItem).badge && (
+                                        <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_4px_rgba(59,130,246,0.6)]" />
+                                    )}
                                 </Link>
                             ))}
                         </nav>
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <TodayWidget />
                         <div className="hidden sm:block">
                              <ApiStatusWidget />
                         </div>
@@ -73,13 +85,16 @@ export function Layout({ children }: LayoutProps) {
                             <Link
                                 key={item.path}
                                 to={item.path}
-                                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
+                                className={`relative px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
                                     location.pathname === item.path 
                                         ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-700 shadow-sm' 
                                         : 'text-zinc-600 dark:text-zinc-400 border border-transparent'
                                 }`}
                             >
                                 {item.label}
+                                {(item as NavItem).badge && (
+                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500" />
+                                )}
                             </Link>
                         ))}
                     </div>
@@ -88,7 +103,9 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Main Content */}
             <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-6">
-                {children}
+                <PageTransition>
+                    {children}
+                </PageTransition>
             </main>
         </div>
     );
