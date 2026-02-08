@@ -848,57 +848,48 @@ app.get('/api/sla', authenticateToken, async (req, res) => {
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-        // 1. Get activation and error logs
-        const allLogs = await prisma.activityLog.findMany({
-            where: { createdAt: { gte: monthAgo }, action: { in: ['ACTIVATION', 'RENEWAL', 'MANUAL_ACTIVATION', 'ERROR'] } },
-            select: { action: true, createdAt: true }
-        });
-
-        // 2. Fetch orphan keys (used keys with no subscription = deleted users' activations)
-        // These had successful activations but the subscription was deleted, so they don't appear in logs
-        const orphanKeys = await prisma.key.findMany({
-            where: {
-                status: 'used',
-                subscriptionId: null,
-                usedAt: { not: null, gte: monthAgo }
-            },
+        // Source of truth for successes: USED KEYS (not logs, which can be incomplete)
+        const usedKeys = await prisma.key.findMany({
+            where: { status: 'used', usedAt: { not: null, gte: monthAgo } },
             select: { usedAt: true }
         });
 
-        // Convert orphan keys to synthetic "success" log entries
-        const orphanAsLogs = orphanKeys.map(k => ({ action: 'ACTIVATION', createdAt: k.usedAt }));
+        // Errors come from activity logs (only place they're recorded)
+        const errorLogs = await prisma.activityLog.findMany({
+            where: { createdAt: { gte: monthAgo }, action: 'ERROR' },
+            select: { createdAt: true }
+        });
 
-        // Merge real logs + orphan logs
-        const mergedLogs = [...allLogs, ...orphanAsLogs];
-
-        const calcSLA = (logs) => {
-            const successes = logs.filter(l => l.action !== 'ERROR').length;
-            const errors = logs.filter(l => l.action === 'ERROR').length;
+        const calcSLA = (successes, errors) => {
             const total = successes + errors;
             return { successes, errors, total, rate: total > 0 ? Math.round((successes / total) * 10000) / 100 : 100 };
         };
 
-        const todayLogs = mergedLogs.filter(l => new Date(l.createdAt) >= todayStart);
-        const weekLogs = mergedLogs.filter(l => new Date(l.createdAt) >= weekAgo);
+        const todaySuccesses = usedKeys.filter(k => new Date(k.usedAt) >= todayStart).length;
+        const todayErrors = errorLogs.filter(l => new Date(l.createdAt) >= todayStart).length;
+        const weekSuccesses = usedKeys.filter(k => new Date(k.usedAt) >= weekAgo).length;
+        const weekErrors = errorLogs.filter(l => new Date(l.createdAt) >= weekAgo).length;
+        const monthSuccesses = usedKeys.length;
+        const monthErrors = errorLogs.length;
 
         // Hourly breakdown for chart (last 24 hours)
         const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        const hourlyLogs = mergedLogs.filter(l => new Date(l.createdAt) >= h24ago);
+        const recentKeys = usedKeys.filter(k => new Date(k.usedAt) >= h24ago);
+        const recentErrors = errorLogs.filter(l => new Date(l.createdAt) >= h24ago);
         const hourlyChart = [];
         for (let i = 23; i >= 0; i--) {
             const hourStart = new Date(now.getTime() - i * 60 * 60 * 1000);
             hourStart.setMinutes(0, 0, 0);
             const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
-            const hourLogs = hourlyLogs.filter(l => { const d = new Date(l.createdAt); return d >= hourStart && d < hourEnd; });
-            const s = hourLogs.filter(l => l.action !== 'ERROR').length;
-            const e = hourLogs.filter(l => l.action === 'ERROR').length;
+            const s = recentKeys.filter(k => { const d = new Date(k.usedAt); return d >= hourStart && d < hourEnd; }).length;
+            const e = recentErrors.filter(l => { const d = new Date(l.createdAt); return d >= hourStart && d < hourEnd; }).length;
             hourlyChart.push({ hour: hourStart.toISOString(), successes: s, errors: e });
         }
 
         res.json({
-            today: calcSLA(todayLogs),
-            week: calcSLA(weekLogs),
-            month: calcSLA(mergedLogs),
+            today: calcSLA(todaySuccesses, todayErrors),
+            week: calcSLA(weekSuccesses, weekErrors),
+            month: calcSLA(monthSuccesses, monthErrors),
             hourlyChart
         });
     } catch (e) {
@@ -977,15 +968,15 @@ app.get('/api/today', authenticateToken, async (req, res) => {
         const now = new Date();
         const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
 
-        const [activations, errors, newSubs, orphanToday] = await Promise.all([
-            prisma.activityLog.count({ where: { createdAt: { gte: todayStart }, action: { in: ['ACTIVATION', 'RENEWAL', 'MANUAL_ACTIVATION'] } } }),
+        const [activations, errors, newSubs] = await Promise.all([
+            // Source of truth: used keys with usedAt today
+            prisma.key.count({ where: { status: 'used', usedAt: { gte: todayStart } } }),
             prisma.activityLog.count({ where: { createdAt: { gte: todayStart }, action: 'ERROR' } }),
-            prisma.subscription.count({ where: { createdAt: { gte: todayStart } } }),
-            // Orphan keys used today (deleted users' activations)
-            prisma.key.count({ where: { status: 'used', subscriptionId: null, usedAt: { gte: todayStart } } })
+            // New subs today + orphan keys used today (deleted users count as "new" for that day)
+            prisma.key.count({ where: { status: 'used', usedAt: { gte: todayStart } } })
         ]);
 
-        res.json({ activations: activations + orphanToday, errors, newSubs: newSubs + orphanToday });
+        res.json({ activations, errors, newSubs });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
