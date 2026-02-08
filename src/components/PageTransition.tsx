@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
 interface PageTransitionProps {
@@ -7,23 +7,18 @@ interface PageTransitionProps {
 
 export function PageTransition({ children }: PageTransitionProps) {
     const location = useLocation();
-    const [visible, setVisible] = useState(false);
-    const [content, setContent] = useState(children);
+    const [visible, setVisible] = useState(true);
+    const prevPath = useRef(location.pathname);
 
     useEffect(() => {
-        setVisible(false);
-        // Small delay so the fade-out is barely visible, then swap content and fade in
-        const timer = setTimeout(() => {
-            setContent(children);
-            setVisible(true);
-        }, 50);
-        return () => clearTimeout(timer);
+        if (prevPath.current !== location.pathname) {
+            prevPath.current = location.pathname;
+            // Fade out briefly, then fade in
+            setVisible(false);
+            const timer = setTimeout(() => setVisible(true), 50);
+            return () => clearTimeout(timer);
+        }
     }, [location.pathname]);
-
-    // On first render, show immediately
-    useEffect(() => {
-        setVisible(true);
-    }, []);
 
     return (
         <div
@@ -31,7 +26,7 @@ export function PageTransition({ children }: PageTransitionProps) {
                 visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
             }`}
         >
-            {content}
+            {children}
         </div>
     );
 }
