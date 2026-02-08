@@ -7,6 +7,34 @@ interface FullscreenChartProps {
     chartRef?: React.RefObject<HTMLDivElement | null>;
 }
 
+function inlineStyles(source: SVGElement, target: SVGElement) {
+    const computed = window.getComputedStyle(source);
+    const importantStyles = [
+        'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap',
+        'stroke-linejoin', 'opacity', 'font-family', 'font-size', 'font-weight',
+        'text-anchor', 'dominant-baseline', 'visibility', 'display'
+    ];
+    for (const prop of importantStyles) {
+        const val = computed.getPropertyValue(prop);
+        if (val && val !== '' && val !== 'none' && val !== 'normal' && val !== 'visible') {
+            (target as any).style[prop] = val;
+        }
+    }
+    // Special handling for fill/stroke that might be "none"
+    const fill = computed.getPropertyValue('fill');
+    if (fill) (target as any).style.fill = fill;
+    const stroke = computed.getPropertyValue('stroke');
+    if (stroke) (target as any).style.stroke = stroke;
+
+    const sourceChildren = source.children;
+    const targetChildren = target.children;
+    for (let i = 0; i < sourceChildren.length; i++) {
+        if (sourceChildren[i] instanceof SVGElement && targetChildren[i] instanceof SVGElement) {
+            inlineStyles(sourceChildren[i] as SVGElement, targetChildren[i] as SVGElement);
+        }
+    }
+}
+
 export function FullscreenChart({ title, children, chartRef }: FullscreenChartProps) {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const internalRef = useRef<HTMLDivElement>(null);
@@ -16,28 +44,47 @@ export function FullscreenChart({ title, children, chartRef }: FullscreenChartPr
         const container = activeRef.current;
         if (!container) return;
 
-        // Find the SVG inside recharts
         const svg = container.querySelector('.recharts-wrapper svg') as SVGSVGElement | null;
         if (!svg) return;
 
-        const svgData = new XMLSerializer().serializeToString(svg);
+        // Get actual rendered size
+        const bbox = svg.getBoundingClientRect();
+        const width = bbox.width;
+        const height = bbox.height;
+
+        // Clone SVG and inline all computed styles
+        const cloned = svg.cloneNode(true) as SVGSVGElement;
+        cloned.setAttribute('width', String(width));
+        cloned.setAttribute('height', String(height));
+        // Ensure viewBox is set
+        if (!cloned.getAttribute('viewBox')) {
+            cloned.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        }
+
+        // Inline styles from original to clone
+        inlineStyles(svg, cloned);
+
+        // Serialize
+        const svgData = new XMLSerializer().serializeToString(cloned);
         const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
         const svgUrl = URL.createObjectURL(svgBlob);
 
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            const scale = 2; // High DPI
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
+            const scale = 2;
+            canvas.width = width * scale;
+            canvas.height = height * scale;
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
             ctx.scale(scale, scale);
-            // Fill background
-            ctx.fillStyle = '#09090b';
-            ctx.fillRect(0, 0, img.width, img.height);
-            ctx.drawImage(img, 0, 0);
+
+            // Detect theme for background
+            const isDark = document.documentElement.classList.contains('dark');
+            ctx.fillStyle = isDark ? '#09090b' : '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
 
             canvas.toBlob((blob) => {
                 if (!blob) return;
