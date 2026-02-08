@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { FileText, Sparkles, Bug, Wrench, Zap, Star } from 'lucide-react';
 
@@ -15,76 +16,128 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
     {
-        version: '1.5.0',
+        version: '1.8.0',
         date: '2026-02-08',
         title: 'SLA, Календарь и UX-обновления',
         isNew: true,
         changes: [
             { type: 'feature', text: 'SLA-дашборд — отслеживание процента успешных активаций за день/неделю/месяц с круговыми индикаторами' },
-            { type: 'feature', text: 'Календарь продлений — визуализация запланированных продлений и истечений подписок' },
-            { type: 'feature', text: 'Виджет «Сегодня» в header — быстрая сводка: активации, ошибки, новые за сегодня' },
-            { type: 'feature', text: 'Changelog — страница с историей изменений системы (вы сейчас здесь!)' },
-            { type: 'improvement', text: 'Анимированные переходы между страницами (fade-in)' },
+            { type: 'feature', text: 'Календарь продлений — визуализация запланированных nextActivationDate и дат истечения подписок' },
+            { type: 'feature', text: 'Виджет «Сегодня» в header — быстрая сводка: активации, ошибки, новые пользователи за сегодня' },
+            { type: 'feature', text: 'Changelog — страница с историей изменений системы с таймлайном и badge "NEW"' },
+            { type: 'improvement', text: 'Анимированные переходы между страницами (fade + slide-up, 200ms)' },
+        ]
+    },
+    {
+        version: '1.7.0',
+        date: '2026-02-08',
+        title: 'Скелетоны, Toast-уведомления и Rate Limit Monitor',
+        changes: [
+            { type: 'feature', text: 'Skeleton-загрузка — 6 вариантов анимированных плейсхолдеров для таблиц, карточек, графиков и логов' },
+            { type: 'feature', text: 'Toast-уведомления — всплывающие сообщения (success/error/warning/info) вместо alert()' },
+            { type: 'feature', text: 'Компактный/просторный режим таблиц — переключатель плотности с сохранением в localStorage' },
+            { type: 'feature', text: 'Полноэкранные графики — кнопки разворачивания на весь экран и экспорта в PNG (2x DPI)' },
+            { type: 'feature', text: 'Rate Limit Monitor — трекинг запросов по IP, топ IP-адресов, последние блокировки, авто-обновление каждые 15с' },
+            { type: 'improvement', text: 'Стилизованный скроллбар — тонкий (6px), полупрозрачный, адаптивный к light/dark теме' },
+        ]
+    },
+    {
+        version: '1.6.0',
+        date: '2026-02-08',
+        title: 'Центр уведомлений и Health-check',
+        changes: [
+            { type: 'feature', text: 'Центр уведомлений — колокольчик в header с dropdown: ошибки активации, мало ключей, бэкап устарел, подписки истекают' },
+            { type: 'feature', text: 'Health-check панель — аптайм сервера, память процесса/ОС (progress bars), размер БД, бэкапы, cron-задачи' },
+            { type: 'feature', text: 'Sticky header для таблиц — фиксированный заголовок при скролле длинных таблиц' },
+            { type: 'feature', text: 'Кастомизация колонок — выбор видимых колонок в таблицах ключей и пользователей, сохранение в localStorage' },
+        ]
+    },
+    {
+        version: '1.5.0',
+        date: '2026-02-08',
+        title: 'Расширенная фильтрация и orphan-ключи в статистике',
+        changes: [
+            { type: 'feature', text: 'Расширенные фильтры пользователей — по дате создания, почтовому провайдеру, количеству активаций' },
+            { type: 'feature', text: 'Orphan-ключи в статистике — использованные ключи без подписки теперь учитываются в графиках и когортах' },
+            { type: 'fix', text: 'Исправлена сериализация когорт (BigInt → Number) для корректного JSON-ответа' },
+            { type: 'fix', text: 'Конвертация дат статистики в московский часовой пояс (Europe/Moscow)' },
         ]
     },
     {
         version: '1.4.0',
-        date: '2026-02-08',
-        title: 'Скелетоны, Toast и Rate Limit',
+        date: '2026-02-07',
+        title: 'Аудит-логи и оптимизация активации',
         changes: [
-            { type: 'feature', text: 'Skeleton-загрузка — анимированные плейсхолдеры вместо текста «Загрузка...» на всех страницах' },
-            { type: 'feature', text: 'Toast-уведомления — всплывающие сообщения при действиях вместо alert()' },
-            { type: 'feature', text: 'Компактный/просторный режим таблиц — переключатель плотности с сохранением в localStorage' },
-            { type: 'feature', text: 'Полноэкранные графики — кнопки разворачивания и экспорта PNG' },
-            { type: 'feature', text: 'Rate Limit Monitor — отслеживание запросов, топ IP-адресов, блокировок' },
-            { type: 'improvement', text: 'Стилизованный скроллбар — тонкий, полупрозрачный, адаптивный к теме' },
+            { type: 'feature', text: 'Тип лога AUDIT — отдельный аудит-трейл для всех действий администратора' },
+            { type: 'improvement', text: 'Ранний возврат при успешной активации — не ждём завершения pending, если success уже true' },
+            { type: 'feature', text: 'Request logger middleware — логирование всех запросов на активацию с IP и email' },
+            { type: 'fix', text: 'Скрипт для исправления связей key-subscription (mismatch fix)' },
         ]
     },
     {
         version: '1.3.0',
-        date: '2026-02-07',
-        title: 'Уведомления, Health-check и кастомизация таблиц',
+        date: '2026-02-06',
+        title: 'Склад ключей, бэкапы и UI-улучшения',
         changes: [
-            { type: 'feature', text: 'Центр уведомлений — колокольчик в header с непрочитанными событиями и badge' },
-            { type: 'feature', text: 'Health-check панель — аптайм, память, БД, бэкапы, cron-задачи' },
-            { type: 'feature', text: 'Sticky header таблиц — фиксированный заголовок при скролле' },
-            { type: 'feature', text: 'Кастомизация колонок — выбор видимых колонок с сохранением в localStorage' },
+            { type: 'feature', text: 'Страница «Склад» (Inventory) — burn rate за 7 дней, runway, калькулятор закупки ключей, график расхода за 30 дней' },
+            { type: 'feature', text: 'Управление бэкапами — создание/скачивание/удаление через UI, автобэкап каждые 4 часа (до 18 копий)' },
+            { type: 'feature', text: 'Поддержка 2-месячной подписки — новый план «2m» в боте и админке' },
+            { type: 'feature', text: 'Lifetime activations tracking — учёт общего количества активаций за всё время по пользователю' },
+            { type: 'feature', text: 'Светлая тема — полная поддержка light mode во всех компонентах админки' },
+            { type: 'feature', text: 'Общий Layout компонент — единая навигация, ApiStatusWidget в header, ModeToggle' },
+            { type: 'feature', text: 'Заметки к подпискам — текстовое поле note в модалке редактирования' },
+            { type: 'improvement', text: 'Build optimization — manual chunks для vendor (React), charts (Recharts), ui (Lucide)' },
+            { type: 'fix', text: 'Защита от дублирующих активаций — in-memory lock (processingLocks Set) + проверка по времени (< 2 мин)' },
+            { type: 'fix', text: 'Hover-фон кнопки ModeToggle в light mode' },
         ]
     },
     {
         version: '1.2.0',
         date: '2026-02-06',
-        title: 'Склад ключей и расширенная фильтрация',
+        title: 'Статистика, PWA и когортный анализ',
         changes: [
-            { type: 'feature', text: 'Страница «Склад» — burn rate, runway, калькулятор закупки' },
-            { type: 'feature', text: 'Расширенные фильтры пользователей — по дате, провайдеру, кол-ву активаций' },
-            { type: 'feature', text: 'CSV-экспорт для ключей и пользователей' },
-            { type: 'improvement', text: 'Массовое удаление пользователей' },
+            { type: 'feature', text: 'Страница статистики — линейные графики подключений за 30 дней (Recharts), группировка по типу подписки' },
+            { type: 'feature', text: 'Когортный анализ — статистика удержания по месяцам регистрации (retained 1+, retained 2+)' },
+            { type: 'feature', text: 'PWA-поддержка — Service Worker, manifest, оффлайн-доступ (vite-plugin-pwa)' },
+            { type: 'feature', text: 'CSV-экспорт для ключей и подписок пользователей' },
+            { type: 'improvement', text: 'Замена SVG-чарта на Recharts (LineChart вместо самописного BarChart)' },
+            { type: 'fix', text: 'Исправлено имя таблицы subscriptions в SQL-запросе когорт' },
+            { type: 'fix', text: 'Авторизация и redirect на страницу статистики' },
         ]
     },
     {
         version: '1.1.0',
         date: '2026-02-05',
-        title: 'Статистика и бэкапы',
+        title: 'Управление пользователями, логи и продления',
         changes: [
-            { type: 'feature', text: 'Страница статистики — графики за 30 дней, когортный анализ' },
-            { type: 'feature', text: 'Управление бэкапами — создание, скачивание, удаление' },
-            { type: 'feature', text: 'Автоматические бэкапы каждые 4 часа (до 18 копий)' },
-            { type: 'feature', text: 'Редактирование пользователей — модалка с изменением подписки' },
-            { type: 'security', text: 'Rate limiter (1000 req / 15 min)' },
+            { type: 'feature', text: 'Страница Activity Logs — фильтрация по типу и поиск, автообновление каждые 10 сек' },
+            { type: 'feature', text: 'Планировщик продлений (cron) — автоматическая активация следующего ключа для 2м/3м подписок' },
+            { type: 'feature', text: 'Session upsert — обновление сессии при повторной активации вместо создания дубликата' },
+            { type: 'feature', text: 'Ручная активация из админки — кнопка «Продлить» для подписок с просроченным периодом' },
+            { type: 'feature', text: 'Прогресс-симуляция в боте — анимированные сообщения с этапами активации' },
+            { type: 'improvement', text: 'Оптимизация поллинга — интервал уменьшен до 1с вместо 2с, пропущена проверка ключа (skip key check)' },
+            { type: 'fix', text: 'BigInt сериализация — поддержка telegramId в JSON-ответах' },
+            { type: 'fix', text: 'Динамический статус пользователя — расчёт active/completed по дате окончания вместо статичного поля' },
+            { type: 'fix', text: 'Корректная логика кнопки «Продлить» — проверка истечения endDate' },
         ]
     },
     {
         version: '1.0.0',
         date: '2026-02-04',
-        title: 'Первый релиз',
+        title: 'Первый релиз — CDK Activator',
         changes: [
-            { type: 'feature', text: 'Админ-панель с авторизацией по API-токену' },
-            { type: 'feature', text: 'Управление CDK-ключами (добавление, удаление, статус)' },
-            { type: 'feature', text: 'Telegram-бот для активации подписок (1м / 2м / 3м)' },
-            { type: 'feature', text: 'Автоматическое продление подписок по cron-расписанию' },
-            { type: 'feature', text: 'Логирование всех действий' },
-            { type: 'feature', text: 'Темная и светлая тема, PWA-поддержка' },
+            { type: 'feature', text: 'Админ-панель с авторизацией по Bearer API-токену, сохранение в localStorage' },
+            { type: 'feature', text: 'Управление CDK-ключами — добавление (single + bulk), удаление, статус (active/used), пагинация' },
+            { type: 'feature', text: 'Страница пользователей — список подписок с email, типом, датами, привязанными ключами' },
+            { type: 'feature', text: 'Telegram-бот (Telegraf) — выбор плана (1м/3м), приём JSON-сессии, автоактивация через API' },
+            { type: 'feature', text: 'Система подписок — модели Key, Session, Subscription, ActivityLog (Prisma + SQLite)' },
+            { type: 'feature', text: 'Интеграция с freespaces.gmailshop.top — активация ключей через внешний API с поллингом статуса' },
+            { type: 'feature', text: 'Страница ручной активации (Home) — ввод CDK + JSON сессии, лог-консоль процесса' },
+            { type: 'security', text: 'Helmet.js для secure HTTP headers' },
+            { type: 'security', text: 'Rate limiter — 1000 запросов / 15 мин на IP (express-rate-limit)' },
+            { type: 'security', text: 'CORS-конфигурация через ALLOWED_ORIGINS и авторизация бота через ALLOWED_TELEGRAM_USERS' },
+            { type: 'improvement', text: 'Русская локализация интерфейса' },
+            { type: 'fix', text: 'Trust proxy для корректного определения IP за Nginx' },
         ]
     },
 ];
@@ -101,9 +154,19 @@ export function getChangelogBadge(): boolean {
 
 export function Changelog() {
     const [expandedVersion, setExpandedVersion] = useState<string | null>(changelog[0]?.version || null);
+    const navigate = useNavigate();
+
+    // Auth check
+    useEffect(() => {
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+            navigate('/admin');
+            return;
+        }
+    }, []);
 
     // Mark as seen
-    React.useEffect(() => {
+    useEffect(() => {
         const latest = changelog.find(e => e.isNew);
         if (latest) localStorage.setItem(LAST_SEEN_KEY, latest.version);
     }, []);

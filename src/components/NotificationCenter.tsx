@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getNotifications } from '../services/api';
+import { getNotifications, setAuthToken } from '../services/api';
 import { Bell, X, AlertTriangle, AlertCircle, CheckCircle, Info } from 'lucide-react';
 
 interface Notification {
@@ -38,6 +38,9 @@ export function NotificationCenter() {
 
     const loadNotifications = async () => {
         try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) return;
+            setAuthToken(token);
             const data = await getNotifications();
             setNotifications(data);
             updateUnreadCount(data);

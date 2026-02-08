@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getTodayStats } from '../services/api';
+import { getTodayStats, setAuthToken } from '../services/api';
 
 export function TodayWidget() {
     const [stats, setStats] = useState<{ activations: number; errors: number; newSubs: number } | null>(null);
@@ -14,6 +14,7 @@ export function TodayWidget() {
         try {
             const token = localStorage.getItem('adminToken');
             if (!token) return;
+            setAuthToken(token);
             const data = await getTodayStats();
             setStats(data);
         } catch (e) {
