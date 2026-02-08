@@ -150,3 +150,9 @@ export const getTodayStats = async () => {
     const response = await adminApi.get('/today');
     return response.data;
 };
+
+// Dashboard API
+export const getDashboard = async () => {
+    const response = await adminApi.get('/dashboard');
+    return response.data;
+};

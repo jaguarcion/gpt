@@ -92,6 +92,63 @@ export function SkeletonLogs({ rows = 10 }: { rows?: number }) {
     );
 }
 
+export function SkeletonDashboard() {
+    return (
+        <div className="max-w-6xl mx-auto space-y-6">
+            {/* Header */}
+            <div className="space-y-2">
+                <Pulse className="h-7 w-40" />
+                <Pulse className="h-4 w-64" />
+            </div>
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-zinc-900/50 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <Pulse className="h-3 w-24" />
+                            <Pulse className="h-9 w-9 rounded-lg" />
+                        </div>
+                        <Pulse className="h-8 w-16" />
+                        <Pulse className="h-3 w-28" />
+                    </div>
+                ))}
+            </div>
+            {/* Chart + Feed */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div className="lg:col-span-3 bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                    <Pulse className="h-5 w-48" />
+                    <div className="h-[240px] flex items-end gap-3 px-4">
+                        {Array.from({ length: 7 }).map((_, i) => (
+                            <Pulse key={i} className="flex-1 rounded-t" style={{ height: `${Math.random() * 60 + 30}%` } as React.CSSProperties} />
+                        ))}
+                    </div>
+                </div>
+                <div className="lg:col-span-2 bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-4">
+                    <Pulse className="h-5 w-40" />
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="space-y-2">
+                            <div className="flex gap-2">
+                                <Pulse className="h-4 w-16 rounded-full" />
+                                <Pulse className="h-4 w-12 ml-auto" />
+                            </div>
+                            <Pulse className="h-3 w-full" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {/* Quick links */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="p-4 bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-3">
+                        <Pulse className="h-9 w-9 rounded-lg" />
+                        <Pulse className="h-4 w-24" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export function SkeletonHealthPage() {
     return (
         <div className="max-w-6xl mx-auto space-y-8">

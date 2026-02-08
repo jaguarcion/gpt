@@ -1026,6 +1026,102 @@ app.get('/api/today', authenticateToken, async (req, res) => {
     }
 });
 
+// ===================== DASHBOARD =====================
+app.get('/api/dashboard', authenticateToken, async (req, res) => {
+    try {
+        const now = new Date();
+        const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Key stats
+        const [activeKeys, usedKeys, totalKeys] = await Promise.all([
+            prisma.key.count({ where: { status: 'active' } }),
+            prisma.key.count({ where: { status: 'used' } }),
+            prisma.key.count()
+        ]);
+
+        // Subscription stats
+        const [activeSubs, totalSubs] = await Promise.all([
+            prisma.subscription.count({ where: { status: 'active' } }),
+            prisma.subscription.count()
+        ]);
+
+        // Today stats (from keys — source of truth)
+        const [activationsToday, errorsToday, newSubsToday] = await Promise.all([
+            prisma.key.count({ where: { status: 'used', usedAt: { gte: todayStart } } }),
+            prisma.activityLog.count({ where: { createdAt: { gte: todayStart }, action: 'ERROR' } }),
+            prisma.subscription.count({ where: { startDate: { gte: todayStart } } })
+        ]);
+
+        // SLA today
+        const todayTotal = activationsToday + errorsToday;
+        const slaToday = todayTotal > 0 ? Math.round((activationsToday / todayTotal) * 10000) / 100 : 100;
+
+        // 7-day chart (activations per day)
+        const usedKeysWeek = await prisma.key.findMany({
+            where: { status: 'used', usedAt: { gte: weekAgo } },
+            select: { usedAt: true }
+        });
+        const errorLogsWeek = await prisma.activityLog.findMany({
+            where: { createdAt: { gte: weekAgo }, action: 'ERROR' },
+            select: { createdAt: true }
+        });
+
+        const weekChart = [];
+        for (let i = 6; i >= 0; i--) {
+            const dayStart = new Date(now);
+            dayStart.setDate(dayStart.getDate() - i);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayEnd.getDate() + 1);
+
+            const dayActivations = usedKeysWeek.filter(k => {
+                const d = new Date(k.usedAt);
+                return d >= dayStart && d < dayEnd;
+            }).length;
+            const dayErrors = errorLogsWeek.filter(l => {
+                const d = new Date(l.createdAt);
+                return d >= dayStart && d < dayEnd;
+            }).length;
+
+            weekChart.push({
+                date: dayStart.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+                activations: dayActivations,
+                errors: dayErrors
+            });
+        }
+
+        // Recent activity (last 15 entries)
+        const recentLogs = await prisma.activityLog.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 15,
+            select: { id: true, action: true, details: true, email: true, createdAt: true }
+        });
+
+        // Upcoming renewals (next 7 days)
+        const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const upcomingRenewals = await prisma.subscription.count({
+            where: {
+                status: 'active',
+                nextActivationDate: { gte: now, lte: sevenDaysFromNow }
+            }
+        });
+
+        res.json({
+            keys: { active: activeKeys, used: usedKeys, total: totalKeys },
+            subscriptions: { active: activeSubs, total: totalSubs },
+            today: { activations: activationsToday, errors: errorsToday, newSubs: newSubsToday },
+            sla: { today: slaToday },
+            weekChart,
+            recentLogs,
+            upcomingRenewals
+        });
+    } catch (e) {
+        console.error('Dashboard Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ===================== RATE LIMIT STATS =====================
 app.get('/api/rate-limit/stats', authenticateToken, async (req, res) => {
     try {

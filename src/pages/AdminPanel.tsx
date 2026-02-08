@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
@@ -8,13 +9,11 @@ import { useTableDensity } from '../hooks/useTableDensity';
 import { useToast } from '../components/Toast';
 
 export function AdminPanel() {
-  const [token, setToken] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [keys, setKeys] = useState<any[]>([]);
   const [newKeyCodes, setNewKeyCodes] = useState('');
-  const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  const navigate = useNavigate();
   
   // New states for pagination and filtering
   const [page, setPage] = useState(1);
@@ -35,27 +34,6 @@ export function AdminPanel() {
   const { density, toggle: toggleDensity, cellPadding, headerPadding, fontSize } = useTableDensity();
   const toast = useToast();
 
-  const handleLogin = async () => {
-    if (!token) return;
-    setAuthToken(token);
-    try {
-      await loadData();
-      setIsAuthenticated(true);
-      localStorage.setItem('adminToken', token);
-    } catch (e: any) {
-      console.error('Login error:', e);
-      // If error is 401 or 403, it's token error. 
-      // If network error, axios throws different error.
-      if (e.response && (e.response.status === 401 || e.response.status === 403)) {
-         setMessage({ text: 'Неверный токен', type: 'error' });
-      } else {
-         setMessage({ text: 'Ошибка сети или сервера', type: 'error' });
-      }
-      setIsAuthenticated(false);
-      localStorage.removeItem('adminToken');
-    }
-  };
-
   const loadData = async (currentPage = page, currentStatus = statusFilter) => {
     try {
         const statsData = await getStats();
@@ -72,24 +50,19 @@ export function AdminPanel() {
 
   useEffect(() => {
     const savedToken = localStorage.getItem('adminToken');
-    if (savedToken) {
-      setToken(savedToken);
-      setAuthToken(savedToken);
-      loadData(1, 'all') // Initial load
-        .then(() => setIsAuthenticated(true))
-        .catch(() => {
-          localStorage.removeItem('adminToken');
-          setIsAuthenticated(false);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+    if (!savedToken) {
+      navigate('/admin');
+      return;
     }
+    setAuthToken(savedToken);
+    loadData(1, 'all')
+      .catch(() => { navigate('/admin'); })
+      .finally(() => setLoading(false));
   }, []);
 
   // Reload when page or filter changes
   useEffect(() => {
-      if (isAuthenticated) {
+      if (!loading) {
           loadData();
       }
   }, [page, statusFilter]);
@@ -177,35 +150,11 @@ export function AdminPanel() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-zinc-900/50 p-8 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xl max-w-md w-full space-y-4">
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 text-center">Admin Login</h2>
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="Enter API Token"
-            className="w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-          <button
-            onClick={handleLogin}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            Войти
-          </button>
-          {message && <div className={`text-sm text-center ${message.type === 'error' ? 'text-red-500' : 'text-green-500'}`}>{message.text}</div>}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <Layout>
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Admin Panel</h1>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Управление ключами</h1>
         </div>
 
         {/* Stats */}

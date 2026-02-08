@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Home } from './pages/Home';
+import { Dashboard } from './pages/Dashboard';
 import { AdminPanel } from './pages/AdminPanel';
 import { Users } from './pages/Users';
 import { ActivityLogs } from './pages/ActivityLogs';
@@ -22,7 +23,8 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/admin" element={<Dashboard />} />
+            <Route path="/admin/keys" element={<AdminPanel />} />
             <Route path="/admin/users" element={<Users />} />
             <Route path="/admin/logs" element={<ActivityLogs />} />
             <Route path="/admin/stats" element={<Statistics />} />

@@ -6,7 +6,7 @@ import { NotificationCenter } from './NotificationCenter';
 import { TodayWidget } from './TodayWidget';
 import { PageTransition } from './PageTransition';
 import { getChangelogBadge } from '../pages/Changelog';
-import { ChevronDown, BarChart3, Settings, FileText } from 'lucide-react';
+import { ChevronDown, BarChart3, Settings } from 'lucide-react';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -95,9 +95,9 @@ export function Layout({ children }: LayoutProps) {
     const location = useLocation();
 
     const navEntries: NavEntry[] = [
-        { path: '/admin', label: 'Главная' },
+        { path: '/admin', label: 'Дашборд' },
+        { path: '/admin/keys', label: 'Ключи' },
         { path: '/admin/users', label: 'Пользователи' },
-        { path: '/admin/logs', label: 'Логи' },
         {
             label: 'Аналитика',
             icon: <BarChart3 className="w-4 h-4" />,
@@ -112,6 +112,7 @@ export function Layout({ children }: LayoutProps) {
             label: 'Система',
             icon: <Settings className="w-4 h-4" />,
             items: [
+                { path: '/admin/logs', label: 'Логи' },
                 { path: '/admin/health', label: 'Состояние системы' },
                 { path: '/admin/backups', label: 'Бэкапы' },
                 { path: '/admin/rate-limit', label: 'Rate Limit' },
