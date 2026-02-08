@@ -161,18 +161,17 @@ app.use(express.json({ limit: '1mb' }));
 // Apply rate limiting to all requests
 app.use(limiter);
 
-// Strict rate limit for auth-sensitive endpoints (brute-force protection)
+// Strict rate limit for activation endpoints only (brute-force protection)
+// NOT applied to /api/keys or /api/subscriptions — admin panel makes many requests per page load
 const authLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 10, // Max 10 attempts per minute per IP
+    max: 10,
     message: { error: 'Too many auth attempts, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
 });
-// Apply to endpoints that accept tokens
-app.use('/api/keys', authLimiter);
-app.use('/api/subscriptions', authLimiter);
-app.use('/api/sessions', authLimiter);
+// Only protect the activation endpoint (external-facing, most sensitive)
+app.use('/api/sessions/activate', authLimiter);
 
 const BASE_URL = 'https://freespaces.gmailshop.top';
 
