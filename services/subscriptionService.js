@@ -43,11 +43,11 @@ export class SubscriptionService {
         const type3m = await prisma.subscription.count({ where: { type: '3m', status: 'active' } });
 
         // Cohort Analysis (Lifetime Retention)
-        // Groups by creation month
+        // Groups by start month (actual activation date)
         // SECURITY: Using tagged template literal — Prisma auto-parameterizes. Do NOT use string concatenation here.
         const cohorts = await prisma.$queryRaw`
             SELECT 
-                strftime('%Y-%m', createdAt / 1000, 'unixepoch') as month,
+                strftime('%Y-%m', startDate / 1000, 'unixepoch') as month,
                 COUNT(*) as total_users,
                 SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_users,
                 SUM(CASE WHEN lifetimeActivations >= 2 THEN 1 ELSE 0 END) as retained_1_plus,
@@ -58,14 +58,14 @@ export class SubscriptionService {
             LIMIT 6
         `;
 
-        // Daily chart data (last 30 days)
+        // Daily chart data (last 30 days) — group by startDate (actual activation date, not DB creation date)
         const subscriptions = await prisma.subscription.findMany({
             select: {
-                createdAt: true,
+                startDate: true,
                 type: true
             },
             orderBy: {
-                createdAt: 'asc'
+                startDate: 'asc'
             }
         });
 
@@ -94,7 +94,7 @@ export class SubscriptionService {
 
         // Process normal subscriptions
         subscriptions.forEach(sub => {
-            const date = formatDate(sub.createdAt);
+            const date = formatDate(sub.startDate);
 
             if (!statsMap.has(date)) {
                 statsMap.set(date, { date, total: 0, type1m: 0, type2m: 0, type3m: 0 });
