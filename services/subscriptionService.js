@@ -44,6 +44,7 @@ export class SubscriptionService {
 
         // Cohort Analysis (Lifetime Retention)
         // Groups by creation month
+        // SECURITY: Using tagged template literal — Prisma auto-parameterizes. Do NOT use string concatenation here.
         const cohorts = await prisma.$queryRaw`
             SELECT 
                 strftime('%Y-%m', createdAt / 1000, 'unixepoch') as month,

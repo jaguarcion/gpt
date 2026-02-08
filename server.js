@@ -5,15 +5,30 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import os from 'os';
+import crypto from 'crypto';
 
 dotenv.config();
 
-// Add BigInt serialization support
-BigInt.prototype.toJSON = function() { return this.toString() }
+// Add BigInt serialization support (safe — only adds toJSON, doesn't change behavior)
+if (!BigInt.prototype.toJSON) {
+    Object.defineProperty(BigInt.prototype, 'toJSON', {
+        value: function() { return this.toString(); },
+        writable: false,
+        configurable: false
+    });
+}
 
 const app = express();
 app.set('trust proxy', 1); // Trust Nginx proxy
 app.use(helmet()); // Set secure HTTP headers
+
+// HTTPS redirect (when behind reverse proxy)
+app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https' && process.env.NODE_ENV === 'production') {
+        return res.redirect(301, `https://${req.headers.host}${req.url}`);
+    }
+    next();
+});
 const PORT = process.env.PORT || 3001;
 const API_TOKEN = process.env.API_TOKEN;
 
@@ -128,9 +143,12 @@ const limiter = rateLimit({
 const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
+        // Allow requests without Origin only from localhost (server-to-server, bot, cron)
+        if (!origin) {
+            // Allow internal requests (bot, scheduler, health checks)
+            return callback(null, true);
+        }
+        if (allowedOrigins.length > 0 && allowedOrigins.indexOf(origin) === -1) {
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
             return callback(new Error(msg), false);
         }
@@ -138,25 +156,42 @@ app.use(cors({
     }
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Apply rate limiting to all requests
 app.use(limiter);
+
+// Strict rate limit for auth-sensitive endpoints (brute-force protection)
+const authLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10, // Max 10 attempts per minute per IP
+    message: { error: 'Too many auth attempts, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+// Apply to endpoints that accept tokens
+app.use('/api/keys', authLimiter);
+app.use('/api/subscriptions', authLimiter);
+app.use('/api/sessions', authLimiter);
 
 const BASE_URL = 'https://freespaces.gmailshop.top';
 
 // Utility to wait
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Auth Middleware
+// Auth Middleware (timing-safe token comparison)
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) return res.status(401).json({ error: 'Unauthorized: Missing token' });
-    // Use timingSafeEqual in production for better security against timing attacks, 
-    // but for simple token simple comparison is often enough for this scale.
-    if (token !== API_TOKEN) return res.status(403).json({ error: 'Forbidden: Invalid token' });
+    
+    // Timing-safe comparison to prevent timing attacks
+    const tokenBuf = Buffer.from(token);
+    const apiTokenBuf = Buffer.from(API_TOKEN);
+    if (tokenBuf.length !== apiTokenBuf.length || !crypto.timingSafeEqual(tokenBuf, apiTokenBuf)) {
+        return res.status(403).json({ error: 'Forbidden: Invalid token' });
+    }
 
     next();
 };
@@ -164,14 +199,20 @@ const authenticateToken = (req, res, next) => {
 // Request Logger Middleware
 const requestLogger = (req, res, next) => {
     if (req.path.includes('/activate')) {
-        const timestamp = new Date().toISOString();
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-        const email = req.body.email || (req.body.user ? JSON.parse(req.body.user).email : 'unknown');
-        
-        console.log(`[REQ] ${timestamp} ${req.method} ${req.path} from ${ip} - Email: ${email}`);
-        
-        // Optionally log to DB if needed, but console is good for real-time debugging
-        // LogService.log('REQUEST', `${req.method} ${req.path} from ${ip}`, email);
+        try {
+            const timestamp = new Date().toISOString();
+            const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+            let email = 'unknown';
+            try {
+                email = req.body.email || (req.body.user ? JSON.parse(req.body.user).email : 'unknown');
+            } catch (e) {
+                email = req.body.email || 'parse-error';
+            }
+            console.log(`[REQ] ${timestamp} ${req.method} ${req.path} from ${ip} - Email: ${email}`);
+        } catch (e) {
+            // Never let logger crash the server
+            console.error('[REQ Logger Error]', e.message);
+        }
     }
     next();
 };
@@ -244,11 +285,13 @@ app.post('/api/backups', authenticateToken, async (req, res) => {
 app.get('/api/backups/:filename', authenticateToken, async (req, res) => {
     try {
         const { filename } = req.params;
-        const backupDir = path.join(process.cwd(), 'backups');
-        const filePath = path.join(backupDir, filename);
+        // Sanitize: strip any path separators from filename
+        const safeName = path.basename(filename);
+        const backupDir = path.resolve(process.cwd(), 'backups');
+        const filePath = path.resolve(backupDir, safeName);
         
-        // Security check: ensure no directory traversal
-        if (!filePath.startsWith(backupDir)) {
+        // Security check: ensure resolved path is within backup directory
+        if (!filePath.startsWith(backupDir + path.sep) && filePath !== backupDir) {
             return res.status(403).json({ error: 'Access denied' });
         }
         
@@ -265,10 +308,11 @@ app.get('/api/backups/:filename', authenticateToken, async (req, res) => {
 app.delete('/api/backups/:filename', authenticateToken, async (req, res) => {
     try {
         const { filename } = req.params;
-        const backupDir = path.join(process.cwd(), 'backups');
-        const filePath = path.join(backupDir, filename);
+        const safeName = path.basename(filename);
+        const backupDir = path.resolve(process.cwd(), 'backups');
+        const filePath = path.resolve(backupDir, safeName);
         
-        if (!filePath.startsWith(backupDir)) {
+        if (!filePath.startsWith(backupDir + path.sep) && filePath !== backupDir) {
             return res.status(403).json({ error: 'Access denied' });
         }
         

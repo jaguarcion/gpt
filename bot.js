@@ -116,11 +116,12 @@ bot.on('text', async (ctx) => {
         // Proceed to activation
         await performActivation(ctx, email, cleanText, currentState.type);
     } else if (currentState.step === 'WAITING_EMAIL') {
-        // Validate email format simple
-        if (!text.includes('@')) {
-            return ctx.reply('Это не похоже на валидный email. Попробуйте еще раз.');
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(text)) {
+            return ctx.reply('Это не похоже на валидный email. Проверьте формат (example@mail.com) и попробуйте еще раз.');
         }
-        await performActivation(ctx, text, currentState.sessionJson, currentState.type);
+        await performActivation(ctx, text.toLowerCase().trim(), currentState.sessionJson, currentState.type);
     }
 });
 
