@@ -178,7 +178,6 @@ export function Layout({ children }: LayoutProps) {
                         >
                             <Search className="w-3.5 h-3.5" />
                             <span>Поиск</span>
-                            <kbd className="ml-1 px-1 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px]">⌘K</kbd>
                         </button>
                         <TodayWidget />
                         <div className="hidden sm:block">
