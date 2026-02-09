@@ -58,30 +58,26 @@ export class SubscriptionService {
             LIMIT 6
         `;
 
-        // Daily chart data (last 30 days) — group by startDate (actual activation date, not DB creation date)
-        const subscriptions = await prisma.subscription.findMany({
+        // Daily chart data — UNIFIED: group by key.usedAt (same as /api/today widget)
+        // This ensures chart matches the header widget numbers
+        const usedKeys = await prisma.key.findMany({
+            where: {
+                status: 'used',
+                usedAt: { not: null }
+            },
             select: {
-                startDate: true,
-                type: true
+                usedAt: true,
+                subscription: {
+                    select: { type: true }
+                }
             },
             orderBy: {
-                startDate: 'asc'
+                usedAt: 'asc'
             }
         });
 
-        // 2. Fetch "Orphan" keys (used keys with no subscription) to fill gaps in stats
-        // These are keys that were sold but the subscription record was lost/deleted
-        const orphanKeys = await prisma.key.findMany({
-            where: {
-                status: 'used',
-                subscriptionId: null,
-                usedAt: { not: null }
-            },
-            select: { usedAt: true }
-        });
-        
         const statsMap = new Map();
-        
+
         // Helper to format date with Moscow timezone
         const formatDate = (dateObj) => {
             return new Date(dateObj).toLocaleDateString('ru-RU', {
@@ -92,25 +88,27 @@ export class SubscriptionService {
             }).split('.').reverse().join('-');
         };
 
-        // Process normal subscriptions
-        subscriptions.forEach(sub => {
-            const date = formatDate(sub.startDate);
+        // Process all used keys (both with and without subscriptions)
+        usedKeys.forEach(key => {
+            const date = formatDate(key.usedAt);
+            // Get type from subscription, default to '1m' for orphan keys
+            const type = key.subscription?.type || '1m';
 
             if (!statsMap.has(date)) {
                 statsMap.set(date, { date, total: 0, type1m: 0, type2m: 0, type3m: 0 });
             }
-            
+
             const entry = statsMap.get(date);
             entry.total++;
-            if (sub.type === '1m') entry.type1m++;
-            else if (sub.type === '2m') entry.type2m++;
-            else if (sub.type === '3m') entry.type3m++;
+            if (type === '1m') entry.type1m++;
+            else if (type === '2m') entry.type2m++;
+            else if (type === '3m') entry.type3m++;
         });
 
         const chart = Array.from(statsMap.values()).slice(-30);
         const totalCompleted = await prisma.subscription.count({ where: { status: 'completed' } });
-        
-        // Fix for BigInt serialization (MOVE UP before orphan processing)
+
+        // Fix for BigInt serialization
         const serializedCohorts = cohorts.map(c => ({
             ...c,
             total_users: Number(c.total_users),
@@ -119,51 +117,33 @@ export class SubscriptionService {
             retained_2_plus: Number(c.retained_2_plus)
         }));
 
-        // Process orphan keys (assume 1m type for them)
+        // Count orphan keys for summary stats
+        const orphanKeys = usedKeys.filter(k => !k.subscription);
         let orphanActiveCount = 0;
         let orphanCompletedCount = 0;
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
         orphanKeys.forEach(key => {
-             const usedDate = new Date(key.usedAt);
-             const dateStr = formatDate(key.usedAt);
-             
-             // Chart stats
-             if (!statsMap.has(dateStr)) {
-                 statsMap.set(dateStr, { date: dateStr, total: 0, type1m: 0, type2m: 0, type3m: 0 });
-             }
+            const usedDate = new Date(key.usedAt);
 
-             const entry = statsMap.get(dateStr);
-             entry.total++;
-             entry.type1m++; // Default assumption
+            // Summary stats (Active/Completed assumption based on 30 days)
+            if (usedDate > thirtyDaysAgo) {
+                orphanActiveCount++;
+            } else {
+                orphanCompletedCount++;
+            }
 
-             // Summary stats (Active/Completed assumption based on 30 days)
-             if (usedDate > thirtyDaysAgo) {
-                 orphanActiveCount++;
-             } else {
-                 orphanCompletedCount++;
-             }
+            // Cohort stats fix
+            const monthStr = usedDate.toISOString().slice(0, 7);
+            let cohort = serializedCohorts.find(c => c.month === monthStr);
 
-             // Cohort stats fix
-             // Get YYYY-MM from usedAt
-             const monthStr = usedDate.toISOString().slice(0, 7); // "2026-02"
-             
-             // Find or create cohort entry
-             let cohort = serializedCohorts.find(c => c.month === monthStr);
-             if (!cohort) {
-                 // Note: Usually SQL returns ordered desc, so if we add new one we might break order or limit. 
-                 // But for simplicity let's find existing. If not found (e.g. old orphan), we skip or push.
-                 // Given the limit 6 in SQL, we only patch existing recent months.
-             }
-             
-             if (cohort) {
-                 cohort.total_users++;
-                 if (usedDate > thirtyDaysAgo) {
-                     cohort.active_users++;
-                 }
-                 // We can't know about retained status (re-buys) for orphans easily without email linking
-             }
+            if (cohort) {
+                cohort.total_users++;
+                if (usedDate > thirtyDaysAgo) {
+                    cohort.active_users++;
+                }
+            }
         });
 
         return {
@@ -182,15 +162,15 @@ export class SubscriptionService {
 
     static async getAllSubscriptions(page = 1, limit = 20, search = '', filters = {}) {
         const where = {};
-        
+
         if (search) {
             where.email = { contains: search };
         }
-        
+
         if (filters.status && filters.status !== 'all') {
             where.status = filters.status;
         }
-        
+
         if (filters.type && filters.type !== 'all') {
             where.type = filters.type;
         }
@@ -221,39 +201,39 @@ export class SubscriptionService {
         // For simplicity/performance with sqlite/prisma:
         // Let's rely on client-side or basic status filtering for now, 
         // OR we can add a 'expiringSoon' flag that checks if startDate is older than (Duration - 3 days).
-        
+
         // Let's implement expiring logic:
         if (filters.expiring) {
-             const now = new Date();
-             const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-             
-             // Logic:
-             // End Date = StartDate + Months
-             // We want: EndDate <= threeDaysFromNow AND EndDate >= now
-             // So: StartDate <= threeDaysFromNow - Months AND StartDate >= now - Months
-             
-             // Since 'Months' varies by type, we might need OR conditions
-             
-             const getDateRange = (months) => {
-                 const targetEnd = new Date(threeDaysFromNow);
-                 targetEnd.setMonth(targetEnd.getMonth() - months);
-                 
-                 const targetStart = new Date(now);
-                 targetStart.setMonth(targetStart.getMonth() - months);
-                 
-                 return { lte: targetEnd, gte: targetStart };
-             };
-             
-             where.AND = [
-                 { status: 'active' },
-                 {
-                     OR: [
+            const now = new Date();
+            const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+            // Logic:
+            // End Date = StartDate + Months
+            // We want: EndDate <= threeDaysFromNow AND EndDate >= now
+            // So: StartDate <= threeDaysFromNow - Months AND StartDate >= now - Months
+
+            // Since 'Months' varies by type, we might need OR conditions
+
+            const getDateRange = (months) => {
+                const targetEnd = new Date(threeDaysFromNow);
+                targetEnd.setMonth(targetEnd.getMonth() - months);
+
+                const targetStart = new Date(now);
+                targetStart.setMonth(targetStart.getMonth() - months);
+
+                return { lte: targetEnd, gte: targetStart };
+            };
+
+            where.AND = [
+                { status: 'active' },
+                {
+                    OR: [
                         { type: '1m', startDate: getDateRange(1) },
                         { type: '2m', startDate: getDateRange(2) },
                         { type: '3m', startDate: getDateRange(3) }
-                     ]
-                 }
-             ];
+                    ]
+                }
+            ];
         }
 
         const [subscriptions, total] = await Promise.all([
@@ -286,9 +266,9 @@ export class SubscriptionService {
             where: { telegramId: BigInt(telegramId) },
             select: { email: true }
         });
-        
+
         const emails = sessions.map(s => s.email);
-        
+
         if (emails.length === 0) return [];
 
         return prisma.subscription.findMany({
@@ -324,7 +304,7 @@ export class SubscriptionService {
                 if (lastKey && lastKey.usedAt) {
                     const timeDiff = Date.now() - new Date(lastKey.usedAt).getTime();
                     if (timeDiff < 2 * 60 * 1000) { // 2 minutes
-                        console.log(`[Sub] Skipping duplicate activation for ${email} (activated ${Math.round(timeDiff/1000)}s ago)`);
+                        console.log(`[Sub] Skipping duplicate activation for ${email}(activated ${Math.round(timeDiff / 1000)}s ago)`);
                         return { subscription: existingSub, activationResult: { success: true, message: 'Already activated' } };
                     }
                 }
@@ -341,25 +321,25 @@ export class SubscriptionService {
             let subscription = existingSub; // We already fetched it above
 
             if (subscription) {
-                 // Update existing subscription
-                 // IMPORTANT: Check if we are creating a new one because the previous one was completed/expired?
-                 // Or is this a "re-subscribe" action?
-                 // If status is 'active', we probably shouldn't be here unless user forces it.
-                 // But let's assume this is a fresh start or upgrade.
-                 
-                 // If we are reactivating a user, we should reset their state properly.
-                 
-                 subscription = await prisma.subscription.update({
-                     where: { id: subscription.id },
-                     data: {
-                         type,
-                         status: 'active',
-                         activationsCount: 0, // Reset for new period
-                         lifetimeActivations: subscription.lifetimeActivations, // Keep lifetime stats
-                         startDate: new Date(),
-                         nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
-                     }
-                 });
+                // Update existing subscription
+                // IMPORTANT: Check if we are creating a new one because the previous one was completed/expired?
+                // Or is this a "re-subscribe" action?
+                // If status is 'active', we probably shouldn't be here unless user forces it.
+                // But let's assume this is a fresh start or upgrade.
+
+                // If we are reactivating a user, we should reset their state properly.
+
+                subscription = await prisma.subscription.update({
+                    where: { id: subscription.id },
+                    data: {
+                        type,
+                        status: 'active',
+                        activationsCount: 0, // Reset for new period
+                        lifetimeActivations: subscription.lifetimeActivations, // Keep lifetime stats
+                        startDate: new Date(),
+                        nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
+                    }
+                });
             } else {
                 // 2. Create Subscription Record
                 subscription = await prisma.subscription.create({
@@ -379,7 +359,7 @@ export class SubscriptionService {
             if (sessionJson.expires) {
                 expiresAt = new Date(sessionJson.expires);
             }
-            
+
             await SessionService.createSession(email, sessionJson, expiresAt, telegramId);
 
             // 4. Perform Activation
@@ -388,18 +368,18 @@ export class SubscriptionService {
             if (activationResult.success) {
                 // Mark key as used
                 await KeyService.markKeyAsUsed(key.id, email, subscription.id);
-                
+
                 // Update subscription count
                 // We need to increment lifetimeActivations, and activationsCount (which is 0 now, so becomes 1)
-                
+
                 await prisma.subscription.update({
                     where: { id: subscription.id },
-                    data: { 
+                    data: {
                         activationsCount: 1, // Explicitly set to 1 for first activation
                         lifetimeActivations: { increment: 1 }
                     }
                 });
-                
+
                 // If type is 1m, mark active
                 if (type === '1m') {
                     await prisma.subscription.update({
@@ -407,13 +387,13 @@ export class SubscriptionService {
                         data: { status: 'active', nextActivationDate: null }
                     });
                 }
-                
+
                 await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email);
 
             } else {
-                 // If activation failed
-                 await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email);
-                 throw new Error(`Ошибка активации: ${activationResult.message}`);
+                // If activation failed
+                await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message} `, email);
+                throw new Error(`Ошибка активации: ${activationResult.message} `);
             }
 
             return { subscription, activationResult };
@@ -429,14 +409,14 @@ export class SubscriptionService {
                 cdk,
                 sessionJson
             }, {
-                headers: { 'Authorization': `Bearer ${API_TOKEN}` }
+                headers: { 'Authorization': `Bearer ${API_TOKEN} ` }
             });
             return response.data;
         } catch (error) {
-            console.error(`[Sub #${subscriptionId}] Activation failed:`, error.message);
-            return { 
-                success: false, 
-                message: error.response?.data?.message || error.message 
+            console.error(`[Sub #${subscriptionId}] Activation failed: `, error.message);
+            return {
+                success: false,
+                message: error.response?.data?.message || error.message
             };
         }
     }
@@ -451,7 +431,7 @@ export class SubscriptionService {
         }
 
         if (subscription.activationsCount >= (subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1))) {
-            throw new Error(`Достигнут лимит активаций (${subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1)})`);
+            throw new Error(`Достигнут лимит активаций(${subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1)})`);
         }
 
         // Get Session
@@ -471,14 +451,14 @@ export class SubscriptionService {
 
         if (result.success) {
             await KeyService.markKeyAsUsed(key.id, subscription.email, subscription.id);
-            
+
             const newCount = subscription.activationsCount + 1;
             const maxRounds = subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1);
             const isFinished = newCount >= maxRounds;
-            
+
             await prisma.subscription.update({
                 where: { id: subscription.id },
-                data: { 
+                data: {
                     activationsCount: newCount,
                     lifetimeActivations: { increment: 1 },
                     status: isFinished ? 'completed' : 'active',
@@ -486,7 +466,7 @@ export class SubscriptionService {
                 }
             });
 
-            // notifyAdmins(`🛠 *Ручная активация*\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
+            // notifyAdmins(`🛠 * Ручная активация *\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
             await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/${maxRounds}`, subscription.email);
             return { success: true, message: 'Успешно активировано', round: newCount };
         } else {
@@ -498,13 +478,13 @@ export class SubscriptionService {
     static async deleteSubscription(id) {
         // 1. Delete related sessions? No, sessions might be kept or we delete them too.
         // Usually better to keep history or soft delete. But here we delete hard.
-        
+
         // Delete Keys relation? 
         // Keys are related to Subscription. If we delete subscription, keys.subscriptionId becomes null?
         // Or we should delete keys too? 
         // Prisma schema: subscription Subscription? @relation(fields: [subscriptionId], references: [id])
         // If we don't set onDelete: Cascade, we need to handle it.
-        
+
         // Let's disconnect keys first
         await prisma.key.updateMany({
             where: { subscriptionId: parseInt(id) },
@@ -514,28 +494,28 @@ export class SubscriptionService {
         const deleted = await prisma.subscription.delete({
             where: { id: parseInt(id) }
         });
-        
+
         await LogService.log('USER_DELETE', `Deleted user #${id} (${deleted.email})`);
         return deleted;
     }
 
     static async updateSubscription(id, data) {
         const { email, type, endDate, status, note } = data;
-        
+
         // Prepare update data
         const updateData = {};
         if (email) updateData.email = email;
         if (type) updateData.type = type;
         if (status) updateData.status = status;
         if (note !== undefined) updateData.note = note;
-        
+
         if (endDate) {
-           const end = new Date(endDate);
-           const months = type === '3m' ? 3 : (type === '2m' ? 2 : 1);
-           // New start date = end date - duration
-           const newStart = new Date(end);
-           newStart.setMonth(newStart.getMonth() - months);
-           updateData.startDate = newStart;
+            const end = new Date(endDate);
+            const months = type === '3m' ? 3 : (type === '2m' ? 2 : 1);
+            // New start date = end date - duration
+            const newStart = new Date(end);
+            newStart.setMonth(newStart.getMonth() - months);
+            updateData.startDate = newStart;
         }
 
         return prisma.subscription.update({
@@ -546,12 +526,12 @@ export class SubscriptionService {
 
     static async processScheduledActivations() {
         const now = new Date();
-        
+
         // 1. Mark expired subscriptions as completed
         // For 1m subs: if startDate + 1 month < now -> completed
         // For 3m subs: if activationsCount >= 3 AND last activation date + 1 month < now -> completed
         // To simplify: we can calculate endDate for all active subs and check against now
-        
+
         const activeSubs = await prisma.subscription.findMany({
             where: { status: 'active' }
         });
@@ -560,7 +540,7 @@ export class SubscriptionService {
             const start = new Date(sub.startDate);
             const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
             const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
-            
+
             if (endDate < now) {
                 console.log(`[Scheduler] Marking subscription #${sub.id} (${sub.email}) as completed (expired).`);
                 await prisma.subscription.update({
@@ -571,7 +551,7 @@ export class SubscriptionService {
         }
 
         // 2. Find active subscriptions where nextActivationDate is past due
-            const dueSubscriptions = await prisma.subscription.findMany({
+        const dueSubscriptions = await prisma.subscription.findMany({
             where: {
                 status: 'active',
                 nextActivationDate: { lte: now },
@@ -617,14 +597,14 @@ export class SubscriptionService {
 
                 if (result.success) {
                     await KeyService.markKeyAsUsed(key.id, sub.email, sub.id);
-                    
+
                     const newCount = sub.activationsCount + 1;
                     const maxRounds = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
                     const isFinished = newCount >= maxRounds;
-                    
+
                     await prisma.subscription.update({
                         where: { id: sub.id },
-                        data: { 
+                        data: {
                             activationsCount: newCount,
                             lifetimeActivations: { increment: 1 },
                             status: isFinished ? 'completed' : 'active',
