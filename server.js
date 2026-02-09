@@ -6,6 +6,15 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import os from 'os';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import cron from 'node-cron';
+import prisma from './services/db.js';
+import { KeyService } from './services/keyService.js';
+import { SessionService } from './services/sessionService.js';
+import { LogService } from './services/logService.js';
+import { SubscriptionService } from './services/subscriptionService.js';
+import './backup_service.js';
 
 dotenv.config();
 
@@ -218,18 +227,9 @@ const requestLogger = (req, res, next) => {
 
 app.use(requestLogger);
 
-import prisma from './services/db.js';
-import { KeyService } from './services/keyService.js';
-import { SessionService } from './services/sessionService.js';
-import { LogService } from './services/logService.js';
-import { SubscriptionService } from './services/subscriptionService.js';
+// Helper: get subscription duration in months
+const getMaxRounds = (type) => type === '3m' ? 3 : (type === '2m' ? 2 : 1);
 
-// ... (existing imports and config)
-
-import fs from 'fs';
-import path from 'path';
-
-// ... (existing endpoints)
 
 app.get('/api/backups', authenticateToken, async (req, res) => {
     try {
@@ -653,17 +653,11 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
     }
 });
 
-import cron from 'node-cron';
-
-// ... (existing imports)
-
 // Schedule: Run every hour
 cron.schedule('0 * * * *', async () => {
     console.log('[Cron] Running scheduled activations check...');
     await SubscriptionService.processScheduledActivations();
 });
-
-import './backup_service.js';
 
 // ===================== NOTIFICATIONS =====================
 app.get('/api/notifications', authenticateToken, async (req, res) => {
@@ -743,9 +737,8 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
         let expiringCount = 0;
         activeSubs.forEach(sub => {
             const start = new Date(sub.startDate);
-            const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
             const endDate = new Date(start);
-            endDate.setMonth(endDate.getMonth() + monthsToAdd);
+            endDate.setMonth(endDate.getMonth() + getMaxRounds(sub.type));
             if (endDate <= threeDaysFromNow && endDate >= now) {
                 expiringCount++;
             }
@@ -975,9 +968,8 @@ app.get('/api/calendar', authenticateToken, async (req, res) => {
         // Expiration dates
         activeSubs.forEach(sub => {
             const start = new Date(sub.startDate);
-            const months = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
             const endDate = new Date(start);
-            endDate.setMonth(endDate.getMonth() + months);
+            endDate.setMonth(endDate.getMonth() + getMaxRounds(sub.type));
             events.push({
                 date: endDate.toISOString().split('T')[0],
                 type: 'expiration',

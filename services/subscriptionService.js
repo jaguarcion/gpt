@@ -14,12 +14,15 @@ const ALLOWED_USERS = (process.env.ALLOWED_TELEGRAM_USERS || '')
     .map(id => id.trim())
     .filter(id => id.length > 0);
 
-const bot = new Telegraf(BOT_TOKEN);
+// Use Telegraf.Telegram directly for sending messages — does NOT start polling,
+// avoiding conflicts with the main bot instance in bot.js
+const telegram = BOT_TOKEN ? new Telegraf(BOT_TOKEN).telegram : null;
 
 const notifyAdmins = async (message) => {
+    if (!telegram) return;
     for (const userId of ALLOWED_USERS) {
         try {
-            await bot.telegram.sendMessage(userId, message, { parse_mode: 'Markdown' });
+            await telegram.sendMessage(userId, message, { parse_mode: 'Markdown' });
         } catch (e) {
             console.error(`Failed to send notification to ${userId}:`, e.message);
         }
@@ -33,6 +36,13 @@ const API_TOKEN = process.env.API_TOKEN;
 
 // In-memory lock to prevent race conditions for same user
 const processingLocks = new Set();
+
+// Constants
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+const TWO_MINUTES_MS = 2 * 60 * 1000;
+
+const getMaxRounds = (type) => type === '3m' ? 3 : (type === '2m' ? 2 : 1);
 
 export class SubscriptionService {
     static async getStats() {
@@ -163,8 +173,18 @@ export class SubscriptionService {
     static async getAllSubscriptions(page = 1, limit = 20, search = '', filters = {}) {
         const where = {};
 
+        // Build email filter conditions (search + emailProvider must not overwrite each other)
+        const emailConditions = [];
         if (search) {
-            where.email = { contains: search };
+            emailConditions.push({ email: { contains: search } });
+        }
+        if (filters.emailProvider) {
+            emailConditions.push({ email: { contains: filters.emailProvider } });
+        }
+        if (emailConditions.length === 1) {
+            where.email = emailConditions[0].email;
+        } else if (emailConditions.length > 1) {
+            where.AND = [...(where.AND || []), ...emailConditions];
         }
 
         if (filters.status && filters.status !== 'all') {
@@ -175,16 +195,10 @@ export class SubscriptionService {
             where.type = filters.type;
         }
 
-        // --- NEW FILTERS ---
         if (filters.dateFrom || filters.dateTo) {
             where.createdAt = {};
             if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
             if (filters.dateTo) where.createdAt.lte = new Date(new Date(filters.dateTo).setHours(23, 59, 59, 999));
-        }
-
-        if (filters.emailProvider) {
-            // Prisma 'contains' is case-insensitive usually, but good to be explicit
-            where.email = { contains: filters.emailProvider }; // e.g. "@gmail.com"
         }
 
         if (filters.activationsMin !== undefined || filters.activationsMax !== undefined) {
@@ -192,7 +206,6 @@ export class SubscriptionService {
             if (filters.activationsMin) where.activationsCount.gte = parseInt(filters.activationsMin);
             if (filters.activationsMax) where.activationsCount.lte = parseInt(filters.activationsMax);
         }
-        // -------------------
 
         // Handle "expiring soon" filter (e.g. within 3 days)
         // This is complex because endDate is calculated dynamically in code, not stored in DB directly as 'endDate'
@@ -292,8 +305,6 @@ export class SubscriptionService {
 
         try {
             // 0. Double-check: verify if we recently activated this user (within 2 minutes)
-            // This protects against race conditions that might bypass the memory lock (e.g. server restart or separate processes if scaled)
-            // and logic errors where we might re-activate an active user.
             const existingSub = await prisma.subscription.findFirst({
                 where: { email },
                 include: { keys: { orderBy: { usedAt: 'desc' }, take: 1 } }
@@ -303,7 +314,7 @@ export class SubscriptionService {
                 const lastKey = existingSub.keys[0];
                 if (lastKey && lastKey.usedAt) {
                     const timeDiff = Date.now() - new Date(lastKey.usedAt).getTime();
-                    if (timeDiff < 2 * 60 * 1000) { // 2 minutes
+                    if (timeDiff < TWO_MINUTES_MS) {
                         console.log(`[Sub] Skipping duplicate activation for ${email}(activated ${Math.round(timeDiff / 1000)}s ago)`);
                         return { subscription: existingSub, activationResult: { success: true, message: 'Already activated' } };
                     }
@@ -317,83 +328,105 @@ export class SubscriptionService {
                 throw new Error(`Нет доступных ключей`);
             }
 
-            // Check if subscription exists
-            let subscription = existingSub; // We already fetched it above
+            // 2. Create/Update subscription + session in a transaction
+            let subscription = await prisma.$transaction(async (tx) => {
+                let sub;
+                if (existingSub) {
+                    sub = await tx.subscription.update({
+                        where: { id: existingSub.id },
+                        data: {
+                            type,
+                            status: 'active',
+                            activationsCount: 0,
+                            lifetimeActivations: existingSub.lifetimeActivations,
+                            startDate: new Date(),
+                            nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + THIRTY_DAYS_MS) : null
+                        }
+                    });
+                } else {
+                    sub = await tx.subscription.create({
+                        data: {
+                            email,
+                            type,
+                            status: 'active',
+                            activationsCount: 0,
+                            nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + THIRTY_DAYS_MS) : null
+                        }
+                    });
+                }
 
-            if (subscription) {
-                // Update existing subscription
-                // IMPORTANT: Check if we are creating a new one because the previous one was completed/expired?
-                // Or is this a "re-subscribe" action?
-                // If status is 'active', we probably shouldn't be here unless user forces it.
-                // But let's assume this is a fresh start or upgrade.
+                // Save Session (upsert) inside transaction
+                let expiresAt = new Date(Date.now() + NINETY_DAYS_MS);
+                const parsedSession = typeof sessionJson === 'string' ? (() => { try { return JSON.parse(sessionJson); } catch { return null; } })() : sessionJson;
+                if (parsedSession && parsedSession.expires) {
+                    expiresAt = new Date(parsedSession.expires);
+                }
 
-                // If we are reactivating a user, we should reset their state properly.
-
-                subscription = await prisma.subscription.update({
-                    where: { id: subscription.id },
-                    data: {
-                        type,
-                        status: 'active',
-                        activationsCount: 0, // Reset for new period
-                        lifetimeActivations: subscription.lifetimeActivations, // Keep lifetime stats
-                        startDate: new Date(),
-                        nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
-                    }
+                const existingSession = await tx.session.findFirst({
+                    where: { email },
+                    orderBy: { createdAt: 'desc' }
                 });
-            } else {
-                // 2. Create Subscription Record
-                subscription = await prisma.subscription.create({
-                    data: {
-                        email,
-                        type,
-                        status: 'active',
-                        activationsCount: 0,
-                        nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
-                    }
-                });
-            }
 
-            // 3. Save Session (upsert)
-            // Extract expiresAt from sessionJson if possible, or default
-            let expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // Default 3 months
-            if (sessionJson.expires) {
-                expiresAt = new Date(sessionJson.expires);
-            }
+                if (existingSession) {
+                    await tx.session.update({
+                        where: { id: existingSession.id },
+                        data: {
+                            sessionJson: typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson,
+                            expiresAt,
+                            telegramId: BigInt(telegramId)
+                        }
+                    });
+                } else {
+                    await tx.session.create({
+                        data: {
+                            email,
+                            sessionJson: typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson,
+                            expiresAt,
+                            telegramId: BigInt(telegramId)
+                        }
+                    });
+                }
 
-            await SessionService.createSession(email, sessionJson, expiresAt, telegramId);
+                return sub;
+            });
 
-            // 4. Perform Activation
+            // 3. Perform Activation (external API call — outside transaction)
             const activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionJson);
 
             if (activationResult.success) {
-                // Mark key as used
-                await KeyService.markKeyAsUsed(key.id, email, subscription.id);
-
-                // Update subscription count
-                // We need to increment lifetimeActivations, and activationsCount (which is 0 now, so becomes 1)
-
-                await prisma.subscription.update({
-                    where: { id: subscription.id },
-                    data: {
-                        activationsCount: 1, // Explicitly set to 1 for first activation
-                        lifetimeActivations: { increment: 1 }
-                    }
-                });
-
-                // If type is 1m, mark active
-                if (type === '1m') {
-                    await prisma.subscription.update({
-                        where: { id: subscription.id },
-                        data: { status: 'active', nextActivationDate: null }
+                // Mark key + update subscription counts in a transaction
+                await prisma.$transaction(async (tx) => {
+                    await tx.key.update({
+                        where: { id: key.id },
+                        data: {
+                            status: 'used',
+                            usedAt: new Date(),
+                            usedByEmail: email,
+                            subscriptionId: subscription.id
+                        }
                     });
-                }
+
+                    const updateData = {
+                        activationsCount: 1,
+                        lifetimeActivations: { increment: 1 }
+                    };
+
+                    if (type === '1m') {
+                        updateData.status = 'active';
+                        updateData.nextActivationDate = null;
+                    }
+
+                    await tx.subscription.update({
+                        where: { id: subscription.id },
+                        data: updateData
+                    });
+                });
 
                 await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email);
 
             } else {
-                // If activation failed
-                await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message} `, email);
-                throw new Error(`Ошибка активации: ${activationResult.message} `);
+                await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email);
+                throw new Error(`Ошибка активации: ${activationResult.message}`);
             }
 
             return { subscription, activationResult };
@@ -409,7 +442,7 @@ export class SubscriptionService {
                 cdk,
                 sessionJson
             }, {
-                headers: { 'Authorization': `Bearer ${API_TOKEN} ` }
+                headers: { 'Authorization': `Bearer ${API_TOKEN}` }
             });
             return response.data;
         } catch (error) {
@@ -430,8 +463,9 @@ export class SubscriptionService {
             throw new Error('Подписка не найдена');
         }
 
-        if (subscription.activationsCount >= (subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1))) {
-            throw new Error(`Достигнут лимит активаций(${subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1)})`);
+        const maxRounds = getMaxRounds(subscription.type);
+        if (subscription.activationsCount >= maxRounds) {
+            throw new Error(`Достигнут лимит активаций(${maxRounds})`);
         }
 
         // Get Session
@@ -453,7 +487,6 @@ export class SubscriptionService {
             await KeyService.markKeyAsUsed(key.id, subscription.email, subscription.id);
 
             const newCount = subscription.activationsCount + 1;
-            const maxRounds = subscription.type === '3m' ? 3 : (subscription.type === '2m' ? 2 : 1);
             const isFinished = newCount >= maxRounds;
 
             await prisma.subscription.update({
@@ -462,7 +495,7 @@ export class SubscriptionService {
                     activationsCount: newCount,
                     lifetimeActivations: { increment: 1 },
                     status: isFinished ? 'completed' : 'active',
-                    nextActivationDate: isFinished ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                    nextActivationDate: isFinished ? null : new Date(Date.now() + THIRTY_DAYS_MS)
                 }
             });
 
@@ -537,9 +570,9 @@ export class SubscriptionService {
         });
 
         for (const sub of activeSubs) {
-            const start = new Date(sub.startDate);
-            const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
-            const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));
+            const monthsToAdd = getMaxRounds(sub.type);
+            const endDate = new Date(sub.startDate);
+            endDate.setMonth(endDate.getMonth() + monthsToAdd);
 
             if (endDate < now) {
                 console.log(`[Scheduler] Marking subscription #${sub.id} (${sub.email}) as completed (expired).`);
@@ -599,7 +632,7 @@ export class SubscriptionService {
                     await KeyService.markKeyAsUsed(key.id, sub.email, sub.id);
 
                     const newCount = sub.activationsCount + 1;
-                    const maxRounds = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
+                    const maxRounds = getMaxRounds(sub.type);
                     const isFinished = newCount >= maxRounds;
 
                     await prisma.subscription.update({
@@ -608,7 +641,7 @@ export class SubscriptionService {
                             activationsCount: newCount,
                             lifetimeActivations: { increment: 1 },
                             status: isFinished ? 'completed' : 'active',
-                            nextActivationDate: isFinished ? null : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+                            nextActivationDate: isFinished ? null : new Date(now.getTime() + THIRTY_DAYS_MS)
                         }
                     });
                     console.log(`[Scheduler] Successfully activated round ${newCount} for ${sub.email}`);

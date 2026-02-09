@@ -25,6 +25,8 @@ model Key {
   subscriptionId Int?
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
 
+  @@index([status])
+  @@index([usedByEmail])
   @@map("keys")
 }
 
@@ -37,6 +39,8 @@ model Session {
   telegramId    BigInt
   createdAt     DateTime       @default(now())
   
+  @@index([email])
+  @@index([telegramId])
   @@map("sessions")
 }
 
@@ -55,6 +59,9 @@ model Subscription {
   updatedAt           DateTime  @updatedAt
   keys                Key[]
 
+  @@index([email])
+  @@index([status])
+  @@index([nextActivationDate])
   @@map("subscriptions")
 }
 
@@ -66,5 +73,7 @@ model ActivityLog {
   email     String?  // Related user email (optional)
   createdAt DateTime @default(now())
 
+  @@index([action])
+  @@index([createdAt])
   @@map("activity_logs")
 }
