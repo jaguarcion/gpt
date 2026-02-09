@@ -14,6 +14,7 @@ import { KeyService } from './services/keyService.js';
 import { SessionService } from './services/sessionService.js';
 import { LogService } from './services/logService.js';
 import { SubscriptionService } from './services/subscriptionService.js';
+import eventBus, { emitEvent, EVENTS } from './services/eventBus.js';
 import './backup_service.js';
 
 dotenv.config();
@@ -230,6 +231,77 @@ app.use(requestLogger);
 // Helper: get subscription duration in months
 const getMaxRounds = (type) => type === '3m' ? 3 : (type === '2m' ? 2 : 1);
 
+// Helper: extract client IP from request
+const getClientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+
+// ===================== AUTH =====================
+// Login endpoint — validates API token and returns it for frontend storage
+app.post('/api/auth/login', apiLimiter, (req, res) => {
+    const { token } = req.body;
+
+    if (!token) {
+        return res.status(400).json({ error: 'Token is required' });
+    }
+
+    const tokenBuf = Buffer.from(token);
+    const apiTokenBuf = Buffer.from(API_TOKEN);
+    if (tokenBuf.length !== apiTokenBuf.length || !crypto.timingSafeEqual(tokenBuf, apiTokenBuf)) {
+        return res.status(403).json({ error: 'Invalid token' });
+    }
+
+    res.json({ success: true, message: 'Authenticated' });
+});
+
+// Verify token endpoint — checks if stored token is still valid
+app.get('/api/auth/verify', authenticateToken, (req, res) => {
+    res.json({ valid: true });
+});
+
+// ===================== SSE (Server-Sent Events) =====================
+const sseClients = new Set();
+
+// SSE accepts token via query param since EventSource doesn't support headers
+app.get('/api/events', (req, res, next) => {
+    if (req.query.token) {
+        req.headers['authorization'] = `Bearer ${req.query.token}`;
+    }
+    authenticateToken(req, res, next);
+}, (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
+
+    res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+
+    sseClients.add(res);
+    console.log(`[SSE] Client connected (total: ${sseClients.size})`);
+
+    // Heartbeat every 30s to keep connection alive
+    const heartbeat = setInterval(() => {
+        res.write(': heartbeat\n\n');
+    }, 30000);
+
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        sseClients.delete(res);
+        console.log(`[SSE] Client disconnected (total: ${sseClients.size})`);
+    });
+});
+
+// Broadcast events from eventBus to all SSE clients
+eventBus.on('sse', (event) => {
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    for (const client of sseClients) {
+        try {
+            client.write(data);
+        } catch (e) {
+            sseClients.delete(client);
+        }
+    }
+});
 
 app.get('/api/backups', authenticateToken, async (req, res) => {
     try {
@@ -272,8 +344,7 @@ app.post('/api/backups', authenticateToken, async (req, res) => {
 
         fs.copyFileSync(dbPath, path.join(backupDir, backupName));
 
-        await LogService.log('BACKUP', `Manual backup created: ${backupName}`);
-        await LogService.log('AUDIT', `Admin created backup: ${backupName}`);
+        await LogService.log('BACKUP', `Manual backup created: ${backupName}`, null, { adminIp: getClientIp(req), source: 'admin' });
 
         res.json({ success: true, name: backupName });
     } catch (e) {
@@ -317,8 +388,7 @@ app.delete('/api/backups/:filename', authenticateToken, async (req, res) => {
 
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
-            await LogService.log('BACKUP', `Backup deleted: ${filename}`);
-            await LogService.log('AUDIT', `Admin deleted backup: ${filename}`);
+            await LogService.log('BACKUP', `Backup deleted: ${filename}`, null, { adminIp: getClientIp(req), source: 'admin' });
         }
 
         res.json({ success: true });
@@ -344,16 +414,14 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
         // Handle bulk upload
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
-            await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`);
-            await LogService.log('AUDIT', `Admin added ${result.count} keys via bulk upload`);
+            await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
             return res.json({ success: true, count: result.count });
         }
 
         // Handle single upload (legacy or simple)
         if (code) {
             const key = await KeyService.addKey(code);
-            await LogService.log('KEY_ADDED', `Added single key: ${code}`);
-            await LogService.log('AUDIT', `Admin added single key: ${code}`);
+            await LogService.log('KEY_ADDED', `Added single key: ${code}`, null, { adminIp: getClientIp(req), source: 'admin' });
             return res.json(key);
         }
 
@@ -380,7 +448,7 @@ app.delete('/api/keys/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         await KeyService.deleteKey(id);
-        await LogService.log('AUDIT', `Admin deleted key #${id}`);
+        await LogService.log('KEY_DELETED', `Deleted key #${id}`, null, { adminIp: getClientIp(req), source: 'admin' });
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -511,7 +579,7 @@ app.post('/api/subscriptions/:id/activate', authenticateToken, async (req, res) 
     try {
         const { id } = req.params;
         const result = await SubscriptionService.manualActivate(id);
-        await LogService.log('AUDIT', `Admin manually activated user #${id}`);
+        await LogService.log('MANUAL_ACTIVATION', `Admin manually activated subscription #${id}`, null, { adminIp: getClientIp(req), source: 'admin' });
         res.json(result);
     } catch (e) {
         console.error('Manual Activation Error:', e.message);
@@ -525,8 +593,7 @@ app.put('/api/subscriptions/:id', authenticateToken, async (req, res) => {
         const { email, type, endDate, status } = req.body;
         const result = await SubscriptionService.updateSubscription(id, { email, type, endDate, status });
 
-        await LogService.log('USER_EDIT', `Updated user #${id}: ${JSON.stringify(req.body)}`);
-        await LogService.log('AUDIT', `Admin updated user #${id} (${email})`);
+        await LogService.log('USER_EDIT', `Updated subscription #${id}: ${JSON.stringify(req.body)}`, email, { adminIp: getClientIp(req), source: 'admin' });
 
         res.json(result);
     } catch (e) {
@@ -539,10 +606,57 @@ app.delete('/api/subscriptions/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
         await SubscriptionService.deleteSubscription(id);
-        await LogService.log('AUDIT', `Admin deleted user #${id}`);
+        await LogService.log('USER_DELETE', `Deleted subscription #${id}`, null, { adminIp: getClientIp(req), source: 'admin' });
         res.json({ success: true });
     } catch (e) {
         console.error('Delete User Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ===================== GLOBAL SEARCH (Cmd+K) =====================
+app.get('/api/search', authenticateToken, async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || q.length < 2) {
+            return res.json({ subscriptions: [], keys: [], logs: [] });
+        }
+
+        const query = String(q);
+
+        const [subscriptions, keys, logs] = await Promise.all([
+            prisma.subscription.findMany({
+                where: { email: { contains: query } },
+                take: 5,
+                orderBy: { updatedAt: 'desc' },
+                select: { id: true, email: true, type: true, status: true }
+            }),
+            prisma.key.findMany({
+                where: {
+                    OR: [
+                        { code: { contains: query } },
+                        { usedByEmail: { contains: query } }
+                    ]
+                },
+                take: 5,
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, code: true, status: true, usedByEmail: true }
+            }),
+            prisma.activityLog.findMany({
+                where: {
+                    OR: [
+                        { email: { contains: query } },
+                        { details: { contains: query } }
+                    ]
+                },
+                take: 5,
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, action: true, details: true, email: true, createdAt: true }
+            })
+        ]);
+
+        res.json({ subscriptions, keys, logs });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });

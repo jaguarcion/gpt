@@ -1,4 +1,5 @@
 import prisma from './db.js';
+import { encrypt, decrypt } from './encryptionService.js';
 
 export class SessionService {
     static async createSession(email, sessionJson, expiresAt, telegramId) {
@@ -11,7 +12,7 @@ export class SessionService {
             return prisma.session.update({
                 where: { id: existingSession.id },
                 data: {
-                    sessionJson: JSON.stringify(sessionJson),
+                    sessionJson: encrypt(typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson),
                     expiresAt,
                     telegramId: BigInt(telegramId)
                 }
@@ -21,7 +22,7 @@ export class SessionService {
         return prisma.session.create({
             data: {
                 email,
-                sessionJson: JSON.stringify(sessionJson),
+                sessionJson: encrypt(typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson),
                 expiresAt,
                 telegramId: BigInt(telegramId)
             }
@@ -35,7 +36,12 @@ export class SessionService {
         });
         
         if (session && session.sessionJson) {
-            session.sessionJson = JSON.parse(session.sessionJson);
+            const decrypted = decrypt(session.sessionJson);
+            try {
+                session.sessionJson = JSON.parse(decrypted);
+            } catch {
+                session.sessionJson = decrypted;
+            }
         }
         return session;
     }

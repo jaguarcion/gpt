@@ -19,6 +19,31 @@ export const setAuthToken = (token: string) => {
   adminApi.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 };
 
+// 401 interceptor — redirect to login on auth failure
+adminApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      localStorage.removeItem('adminToken');
+      if (window.location.pathname.startsWith('/admin')) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Auth APIs
+export const loginWithToken = async (token: string) => {
+  const response = await publicApi.post('/api/auth/login', { token });
+  return response.data;
+};
+
+export const verifyToken = async () => {
+  const response = await adminApi.get('/auth/verify');
+  return response.data;
+};
+
 export const checkKey = async (code: string) => {
   const response = await publicApi.post('/api/cdks/public/check', { code }, {
     headers: { 'x-product-id': 'chatgpt' }
@@ -154,5 +179,11 @@ export const getTodayStats = async () => {
 // Dashboard API
 export const getDashboard = async () => {
     const response = await adminApi.get('/dashboard');
+    return response.data;
+};
+
+// Global Search API (Cmd+K)
+export const globalSearch = async (query: string) => {
+    const response = await adminApi.get('/search', { params: { q: query } });
     return response.data;
 };

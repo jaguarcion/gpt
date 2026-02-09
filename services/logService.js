@@ -1,7 +1,7 @@
 import prisma from './db.js';
 
 export class LogService {
-    static async log(action, details = '', email = null) {
+    static async log(action, details = '', email = null, { adminIp = null, source = null } = {}) {
         try {
             // Ensure details is a string if it's an object
             const detailsStr = typeof details === 'object' ? JSON.stringify(details) : String(details);
@@ -10,7 +10,9 @@ export class LogService {
                 data: {
                     action,
                     details: detailsStr,
-                    email
+                    email,
+                    adminIp,
+                    source
                 }
             });
         } catch (e) {
@@ -33,7 +35,8 @@ export class LogService {
         if (search) {
             where.OR = [
                 { email: { contains: search } },
-                { details: { contains: search } }
+                { details: { contains: search } },
+                { adminIp: { contains: search } }
             ];
         }
 

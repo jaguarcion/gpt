@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Home } from './pages/Home';
+import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { AdminPanel } from './pages/AdminPanel';
 import { Users } from './pages/Users';
@@ -15,6 +16,7 @@ import { Calendar } from './pages/Calendar';
 import { Changelog } from './pages/Changelog';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ToastProvider } from './components/Toast';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -23,18 +25,19 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/admin" element={<Dashboard />} />
-            <Route path="/admin/keys" element={<AdminPanel />} />
-            <Route path="/admin/users" element={<Users />} />
-            <Route path="/admin/logs" element={<ActivityLogs />} />
-            <Route path="/admin/stats" element={<Statistics />} />
-            <Route path="/admin/backups" element={<Backups />} />
-            <Route path="/admin/inventory" element={<Inventory />} />
-            <Route path="/admin/health" element={<Health />} />
-            <Route path="/admin/rate-limit" element={<RateLimit />} />
-            <Route path="/admin/sla" element={<SLA />} />
-            <Route path="/admin/calendar" element={<Calendar />} />
-            <Route path="/admin/changelog" element={<Changelog />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/admin" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/admin/keys" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
+            <Route path="/admin/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+            <Route path="/admin/logs" element={<ProtectedRoute><ActivityLogs /></ProtectedRoute>} />
+            <Route path="/admin/stats" element={<ProtectedRoute><Statistics /></ProtectedRoute>} />
+            <Route path="/admin/backups" element={<ProtectedRoute><Backups /></ProtectedRoute>} />
+            <Route path="/admin/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+            <Route path="/admin/health" element={<ProtectedRoute><Health /></ProtectedRoute>} />
+            <Route path="/admin/rate-limit" element={<ProtectedRoute><RateLimit /></ProtectedRoute>} />
+            <Route path="/admin/sla" element={<ProtectedRoute><SLA /></ProtectedRoute>} />
+            <Route path="/admin/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
+            <Route path="/admin/changelog" element={<ProtectedRoute><Changelog /></ProtectedRoute>} />
           </Routes>
         </BrowserRouter>
       </ToastProvider>

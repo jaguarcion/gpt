@@ -5,6 +5,8 @@ import { Telegraf } from 'telegraf';
 import { KeyService } from './keyService.js';
 import { SessionService } from './sessionService.js';
 import { LogService } from './logService.js';
+import { encrypt } from './encryptionService.js';
+import { emitEvent, EVENTS } from './eventBus.js';
 
 dotenv.config();
 
@@ -367,11 +369,13 @@ export class SubscriptionService {
                     orderBy: { createdAt: 'desc' }
                 });
 
+                const encryptedSession = encrypt(typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson);
+
                 if (existingSession) {
                     await tx.session.update({
                         where: { id: existingSession.id },
                         data: {
-                            sessionJson: typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson,
+                            sessionJson: encryptedSession,
                             expiresAt,
                             telegramId: BigInt(telegramId)
                         }
@@ -380,7 +384,7 @@ export class SubscriptionService {
                     await tx.session.create({
                         data: {
                             email,
-                            sessionJson: typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson,
+                            sessionJson: encryptedSession,
                             expiresAt,
                             telegramId: BigInt(telegramId)
                         }
@@ -422,10 +426,12 @@ export class SubscriptionService {
                     });
                 });
 
-                await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email);
+                await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email, { source: 'bot' });
+                emitEvent(EVENTS.ACTIVATION, { subscriptionId: subscription.id, email, type });
 
             } else {
-                await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email);
+                await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email, { source: 'bot' });
+                emitEvent(EVENTS.ERROR, { subscriptionId: subscription.id, email, message: activationResult.message });
                 throw new Error(`Ошибка активации: ${activationResult.message}`);
             }
 
@@ -500,10 +506,10 @@ export class SubscriptionService {
             });
 
             // notifyAdmins(`🛠 * Ручная активация *\nEmail: \`${subscription.email}\`\nРаунд: ${newCount}/3`);
-            await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/${maxRounds}`, subscription.email);
+            await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/${maxRounds}`, subscription.email, { source: 'system' });
             return { success: true, message: 'Успешно активировано', round: newCount };
         } else {
-            await LogService.log('ERROR', `Manual activation failed for #${subscription.id}: ${result.message}`, subscription.email);
+            await LogService.log('ERROR', `Manual activation failed for #${subscription.id}: ${result.message}`, subscription.email, { source: 'system' });
             throw new Error(result.message || 'Ошибка активации');
         }
     }
@@ -528,7 +534,7 @@ export class SubscriptionService {
             where: { id: parseInt(id) }
         });
 
-        await LogService.log('USER_DELETE', `Deleted user #${id} (${deleted.email})`);
+        await LogService.log('USER_DELETE', `Deleted user #${id} (${deleted.email})`, deleted.email, { source: 'system' });
         return deleted;
     }
 
@@ -646,11 +652,13 @@ export class SubscriptionService {
                     });
                     console.log(`[Scheduler] Successfully activated round ${newCount} for ${sub.email}`);
                     notifyAdmins(`🔄 *Успешное продление*\nEmail: \`${sub.email}\`\nРаунд: ${newCount}/${maxRounds}\nID Подписки: ${sub.id}`);
-                    await LogService.log('RENEWAL', `Auto-renewed subscription #${sub.id}, round ${newCount}/${maxRounds}`, sub.email);
+                    await LogService.log('RENEWAL', `Auto-renewed subscription #${sub.id}, round ${newCount}/${maxRounds}`, sub.email, { source: 'scheduler' });
+                    emitEvent(EVENTS.RENEWAL, { subscriptionId: sub.id, email: sub.email, round: newCount, maxRounds });
                 } else {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
                     notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
-                    await LogService.log('ERROR', `Auto-renewal failed for #${sub.id}: ${result.message}`, sub.email);
+                    await LogService.log('ERROR', `Auto-renewal failed for #${sub.id}: ${result.message}`, sub.email, { source: 'scheduler' });
+                    emitEvent(EVENTS.ERROR, { subscriptionId: sub.id, email: sub.email, message: result.message });
                 }
 
             } catch (e) {

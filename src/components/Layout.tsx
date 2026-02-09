@@ -6,7 +6,11 @@ import { NotificationCenter } from './NotificationCenter';
 import { TodayWidget } from './TodayWidget';
 import { PageTransition } from './PageTransition';
 import { getChangelogBadge } from '../pages/Changelog';
-import { ChevronDown, BarChart3, Settings } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
+import { CommandPalette } from './CommandPalette';
+import { PullToRefreshIndicator } from './PullToRefreshIndicator';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { ChevronDown, BarChart3, Settings, LogOut, Search } from 'lucide-react';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -94,6 +98,12 @@ export function Layout({ children }: LayoutProps) {
     const navigate = useNavigate();
     const location = useLocation();
 
+    const pullToRefresh = usePullToRefresh({
+        onRefresh: async () => {
+            window.location.reload();
+        }
+    });
+
     const navEntries: NavEntry[] = [
         { path: '/admin', label: 'Дашборд' },
         { path: '/admin/keys', label: 'Ключи' },
@@ -128,6 +138,8 @@ export function Layout({ children }: LayoutProps) {
 
     return (
         <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 flex flex-col">
+            <CommandPalette />
+            <PullToRefreshIndicator {...pullToRefresh} />
             {/* Header */}
             <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -159,6 +171,15 @@ export function Layout({ children }: LayoutProps) {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+                            className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors"
+                            title="Поиск (Ctrl+K)"
+                        >
+                            <Search className="w-3.5 h-3.5" />
+                            <span>Поиск</span>
+                            <kbd className="ml-1 px-1 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px]">⌘K</kbd>
+                        </button>
                         <TodayWidget />
                         <div className="hidden sm:block">
                              <ApiStatusWidget />
@@ -166,10 +187,12 @@ export function Layout({ children }: LayoutProps) {
                         <NotificationCenter />
                         <ModeToggle />
                         <button 
-                            onClick={() => { localStorage.removeItem('adminToken'); navigate('/admin'); }}
-                            className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                            onClick={() => { useAuthStore.getState().logout(); navigate('/login'); }}
+                            className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                            title="Выйти"
                         >
-                            Выйти
+                            <LogOut className="w-4 h-4" />
+                            <span className="hidden sm:inline">Выйти</span>
                         </button>
                     </div>
                 </div>

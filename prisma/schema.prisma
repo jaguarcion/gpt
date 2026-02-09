@@ -68,12 +68,15 @@ model Subscription {
 // Activity Log Model
 model ActivityLog {
   id        Int      @id @default(autoincrement())
-  action    String   // ACTIVATION, RENEWAL, ERROR, ADMIN_LOGIN, KEY_ADDED
+  action    String   // ACTIVATION, RENEWAL, ERROR, ADMIN_LOGIN, KEY_ADDED, ADMIN_ACTION
   details   String?  // JSON string or text details
   email     String?  // Related user email (optional)
+  adminIp   String?  // IP address of the admin who performed the action
+  source    String?  // "admin", "bot", "scheduler", "system"
   createdAt DateTime @default(now())
 
   @@index([action])
   @@index([createdAt])
+  @@index([source])
   @@map("activity_logs")
 }

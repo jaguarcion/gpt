@@ -58,6 +58,24 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^\/api\/(dashboard|keys\/stats|notifications|today|health|sla)$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: { maxEntries: 20, maxAgeSeconds: 300 },
+              networkTimeoutSeconds: 3,
+            },
+          },
+          {
+            urlPattern: /^\/api\//,
+            handler: 'NetworkOnly',
+          },
+        ],
+      },
       manifest: {
         name: 'GPT Admin Panel',
         short_name: 'GPT Admin',
@@ -65,6 +83,10 @@ export default defineConfig({
         theme_color: '#09090b',
         background_color: '#09090b',
         display: 'standalone',
+        start_url: '/admin',
+        scope: '/',
+        orientation: 'any',
+        categories: ['business', 'productivity'],
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -75,6 +97,12 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }
