@@ -236,7 +236,7 @@ const getClientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0]?.trim
 
 // ===================== AUTH =====================
 // Login endpoint — validates API token and returns it for frontend storage
-app.post('/api/auth/login', apiLimiter, (req, res) => {
+app.post('/api/auth/login', authLimiter, (req, res) => {
     const { token } = req.body;
 
     if (!token) {
