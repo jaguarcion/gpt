@@ -64,10 +64,39 @@ export class LogService {
             ];
         }
 
-        return prisma.activityLog.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-            take: Number(limit)
-        });
+        // Use select with safe fields first, fallback to core-only if new columns don't exist
+        try {
+            return await prisma.activityLog.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                take: Number(limit),
+                select: {
+                    id: true,
+                    action: true,
+                    details: true,
+                    email: true,
+                    adminIp: true,
+                    source: true,
+                    createdAt: true
+                }
+            });
+        } catch (e) {
+            if (e.message && (e.message.includes('adminIp') || e.message.includes('source') || e.message.includes('does not exist'))) {
+                console.warn('LogService.getLogs: Falling back to core fields only (migration pending)');
+                return prisma.activityLog.findMany({
+                    where,
+                    orderBy: { createdAt: 'desc' },
+                    take: Number(limit),
+                    select: {
+                        id: true,
+                        action: true,
+                        details: true,
+                        email: true,
+                        createdAt: true
+                    }
+                });
+            }
+            throw e;
+        }
     }
 }
