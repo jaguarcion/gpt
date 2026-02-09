@@ -1009,15 +1009,34 @@ app.get('/api/calendar', authenticateToken, async (req, res) => {
 app.get('/api/today', authenticateToken, async (req, res) => {
     try {
         const now = new Date();
-        const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+        // Считаем "сегодня" по московскому времени, чтобы совпадало с дневным графиком
+        const formatMoscowDate = (date) =>
+            new Date(date).toLocaleDateString('ru-RU', {
+                timeZone: 'Europe/Moscow',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
 
-        const [activations, errors, newSubs] = await Promise.all([
-            // Source of truth: used keys with usedAt today
-            prisma.key.count({ where: { status: 'used', usedAt: { gte: todayStart } } }),
-            prisma.activityLog.count({ where: { createdAt: { gte: todayStart }, action: 'ERROR' } }),
-            // New subs today + orphan keys used today (deleted users count as "new" for that day)
-            prisma.key.count({ where: { status: 'used', usedAt: { gte: todayStart } } })
+        const todayMoscow = formatMoscowDate(now);
+        const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+
+        const [usedKeys, errorLogs] = await Promise.all([
+            // Берём ключи за последние 2 дня и фильтруем по дате в МСК
+            prisma.key.findMany({
+                where: { status: 'used', usedAt: { gte: twoDaysAgo } },
+                select: { usedAt: true }
+            }),
+            prisma.activityLog.findMany({
+                where: { createdAt: { gte: twoDaysAgo }, action: 'ERROR' },
+                select: { createdAt: true }
+            })
         ]);
+
+        const activations = usedKeys.filter(k => formatMoscowDate(k.usedAt) === todayMoscow).length;
+        const errors = errorLogs.filter(l => formatMoscowDate(l.createdAt) === todayMoscow).length;
+        // Новые подписки считаем так же, как и активации (включая "ключи-сироты")
+        const newSubs = activations;
 
         res.json({ activations, errors, newSubs });
     } catch (e) {
@@ -1029,7 +1048,17 @@ app.get('/api/today', authenticateToken, async (req, res) => {
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
     try {
         const now = new Date();
-        const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+        // Единое определение "сегодня" по московскому времени — чтобы совпадало с /api/stats/daily
+        const formatMoscowDate = (date) =>
+            new Date(date).toLocaleDateString('ru-RU', {
+                timeZone: 'Europe/Moscow',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+
+        const todayMoscow = formatMoscowDate(now);
+        const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
         // Key stats
@@ -1045,12 +1074,25 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
             prisma.subscription.count()
         ]);
 
-        // Today stats (from keys — source of truth)
-        const [activationsToday, errorsToday, newSubsToday] = await Promise.all([
-            prisma.key.count({ where: { status: 'used', usedAt: { gte: todayStart } } }),
-            prisma.activityLog.count({ where: { createdAt: { gte: todayStart }, action: 'ERROR' } }),
-            prisma.subscription.count({ where: { startDate: { gte: todayStart } } })
+        // Today stats (from keys/subscriptions, считаем по московскому времени)
+        const [todayKeys, todayErrorLogs, todaySubs] = await Promise.all([
+            prisma.key.findMany({
+                where: { status: 'used', usedAt: { gte: twoDaysAgo } },
+                select: { usedAt: true }
+            }),
+            prisma.activityLog.findMany({
+                where: { createdAt: { gte: twoDaysAgo }, action: 'ERROR' },
+                select: { createdAt: true }
+            }),
+            prisma.subscription.findMany({
+                where: { startDate: { gte: twoDaysAgo } },
+                select: { startDate: true }
+            })
         ]);
+
+        const activationsToday = todayKeys.filter(k => formatMoscowDate(k.usedAt) === todayMoscow).length;
+        const errorsToday = todayErrorLogs.filter(l => formatMoscowDate(l.createdAt) === todayMoscow).length;
+        const newSubsToday = todaySubs.filter(s => formatMoscowDate(s.startDate) === todayMoscow).length;
 
         // SLA today
         const todayTotal = activationsToday + errorsToday;
