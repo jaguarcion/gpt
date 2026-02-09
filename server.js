@@ -12,7 +12,7 @@ dotenv.config();
 // Add BigInt serialization support (safe — only adds toJSON, doesn't change behavior)
 if (!BigInt.prototype.toJSON) {
     Object.defineProperty(BigInt.prototype, 'toJSON', {
-        value: function() { return this.toString(); },
+        value: function () { return this.toString(); },
         writable: false,
         configurable: false
     });
@@ -184,7 +184,7 @@ const authenticateToken = (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) return res.status(401).json({ error: 'Unauthorized: Missing token' });
-    
+
     // Timing-safe comparison to prevent timing attacks
     const tokenBuf = Buffer.from(token);
     const apiTokenBuf = Buffer.from(API_TOKEN);
@@ -237,7 +237,7 @@ app.get('/api/backups', authenticateToken, async (req, res) => {
         if (!fs.existsSync(backupDir)) {
             return res.json([]);
         }
-        
+
         const files = fs.readdirSync(backupDir)
             .filter(file => file.endsWith('.db'))
             .map(file => {
@@ -249,7 +249,7 @@ app.get('/api/backups', authenticateToken, async (req, res) => {
                 };
             })
             .sort((a, b) => new Date(b.created) - new Date(a.created));
-            
+
         res.json(files);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -262,19 +262,19 @@ app.post('/api/backups', authenticateToken, async (req, res) => {
         // Since backup_service runs on import, we can't easily call its internal function directly without refactoring.
         // For now, let's implement a simple manual copy here or refactor backup_service to export the function.
         // Let's do a simple copy here to avoid complex refactoring in this step.
-        
+
         const backupDir = path.join(process.cwd(), 'backups');
         if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir);
-        
+
         const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const backupName = `manual_backup_${timestamp}.db`;
-        
+
         fs.copyFileSync(dbPath, path.join(backupDir, backupName));
-        
+
         await LogService.log('BACKUP', `Manual backup created: ${backupName}`);
         await LogService.log('AUDIT', `Admin created backup: ${backupName}`);
-        
+
         res.json({ success: true, name: backupName });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -288,16 +288,16 @@ app.get('/api/backups/:filename', authenticateToken, async (req, res) => {
         const safeName = path.basename(filename);
         const backupDir = path.resolve(process.cwd(), 'backups');
         const filePath = path.resolve(backupDir, safeName);
-        
+
         // Security check: ensure resolved path is within backup directory
         if (!filePath.startsWith(backupDir + path.sep) && filePath !== backupDir) {
             return res.status(403).json({ error: 'Access denied' });
         }
-        
+
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({ error: 'File not found' });
         }
-        
+
         res.download(filePath);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -310,17 +310,17 @@ app.delete('/api/backups/:filename', authenticateToken, async (req, res) => {
         const safeName = path.basename(filename);
         const backupDir = path.resolve(process.cwd(), 'backups');
         const filePath = path.resolve(backupDir, safeName);
-        
+
         if (!filePath.startsWith(backupDir + path.sep) && filePath !== backupDir) {
             return res.status(403).json({ error: 'Access denied' });
         }
-        
+
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
             await LogService.log('BACKUP', `Backup deleted: ${filename}`);
             await LogService.log('AUDIT', `Admin deleted backup: ${filename}`);
         }
-        
+
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -340,7 +340,7 @@ app.get('/api/logs', authenticateToken, async (req, res) => {
 app.post('/api/keys', authenticateToken, async (req, res) => {
     try {
         const { code, codes } = req.body;
-        
+
         // Handle bulk upload
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
@@ -356,7 +356,7 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
             await LogService.log('AUDIT', `Admin added single key: ${code}`);
             return res.json(key);
         }
-        
+
         return res.status(400).json({ error: 'Code or codes array required' });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -420,17 +420,17 @@ app.get('/api/stats/daily', authenticateToken, async (req, res) => {
 app.get('/api/subscriptions', authenticateToken, async (req, res) => {
     try {
         const { telegramId, page, limit, search, status, type, expiring, dateFrom, dateTo, emailProvider, activationsMin, activationsMax } = req.query;
-        
+
         if (telegramId) {
-             const subscriptions = await SubscriptionService.getSubscriptionsByTelegramId(telegramId);
-             return res.json({ subscriptions, total: subscriptions.length, totalPages: 1, currentPage: 1 });
+            const subscriptions = await SubscriptionService.getSubscriptionsByTelegramId(telegramId);
+            return res.json({ subscriptions, total: subscriptions.length, totalPages: 1, currentPage: 1 });
         }
 
         const result = await SubscriptionService.getAllSubscriptions(
-            parseInt(page) || 1, 
-            parseInt(limit) || 20, 
+            parseInt(page) || 1,
+            parseInt(limit) || 20,
             search || '',
-            { 
+            {
                 status: status || 'all',
                 type: type || 'all',
                 expiring: expiring === 'true',
@@ -464,19 +464,19 @@ app.get('/api/status', authenticateToken, async (req, res) => {
         // Check main page instead of specific API endpoint to avoid 404
         const response = await axios.get(`${BASE_URL}`, {
             timeout: 5000,
-            headers: { 'x-product-id': 'chatgpt' } 
+            headers: { 'x-product-id': 'chatgpt' }
         });
         const duration = Date.now() - start;
-        
-        res.json({ 
-            online: true, 
+
+        res.json({
+            online: true,
             latency: duration,
             message: 'API Online'
         });
     } catch (e) {
         console.error('API Status Check Error:', e.message);
-        res.json({ 
-            online: false, 
+        res.json({
+            online: false,
             latency: 0,
             message: e.message || 'API Unreachable'
         });
@@ -487,15 +487,15 @@ app.get('/api/status', authenticateToken, async (req, res) => {
 app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
     try {
         const { email, sessionJson, subscriptionType, telegramId } = req.body;
-        
+
         if (!email || !sessionJson || !subscriptionType || !telegramId) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
         const result = await SubscriptionService.createSubscription(
-            email, 
-            subscriptionType, 
-            telegramId, 
+            email,
+            subscriptionType,
+            telegramId,
             sessionJson
         );
 
@@ -524,10 +524,10 @@ app.put('/api/subscriptions/:id', authenticateToken, async (req, res) => {
         const { id } = req.params;
         const { email, type, endDate, status } = req.body;
         const result = await SubscriptionService.updateSubscription(id, { email, type, endDate, status });
-        
+
         await LogService.log('USER_EDIT', `Updated user #${id}: ${JSON.stringify(req.body)}`);
         await LogService.log('AUDIT', `Admin updated user #${id} (${email})`);
-        
+
         res.json(result);
     } catch (e) {
         console.error('Update User Error:', e.message);
@@ -549,7 +549,7 @@ app.delete('/api/subscriptions/:id', authenticateToken, async (req, res) => {
 
 // Legacy Endpoint (keep for backward compatibility or direct key usage)
 app.post('/api/activate-key', authenticateToken, async (req, res) => {
-// ... (existing implementation)
+    // ... (existing implementation)
     const { cdk, sessionJson } = req.body;
 
     if (!cdk || !sessionJson) {
@@ -578,19 +578,19 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
         // --- STEP 2: REQUEST ACTIVATION ---
         console.log(`[${cdk}] Step 1: Requesting activation...`);
-        
+
         // Ensure sessionJson is a string (if passed as object, stringify it)
         // The API expects the 'user' field to be the JSON string of the session
         let sessionPayload = sessionJson;
         if (typeof sessionJson === 'object') {
             sessionPayload = JSON.stringify(sessionJson);
         } else {
-             // Validate it's valid JSON if it's a string
-             try {
+            // Validate it's valid JSON if it's a string
+            try {
                 JSON.parse(sessionJson);
-             } catch (e) {
+            } catch (e) {
                 return res.status(400).json({ error: 'Invalid Session JSON format' });
-             }
+            }
         }
 
         const activateRes = await axios.post(`${BASE_URL}/api/stocks/public/outstock`,
@@ -600,10 +600,10 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
         const taskId = activateRes.data; // API returns UUID string directly
         if (!taskId || typeof taskId !== 'string') {
-             console.error(`[${cdk}] Failed to get taskId. Response:`, activateRes.data);
-             return res.status(500).json({ success: false, message: 'Failed to get activation Task ID' });
+            console.error(`[${cdk}] Failed to get taskId. Response:`, activateRes.data);
+            return res.status(500).json({ success: false, message: 'Failed to get activation Task ID' });
         }
-        
+
         console.log(`[${cdk}] Task ID received: ${taskId}. Starting poll...`);
 
         // --- STEP 3: POLL STATUS ---
@@ -643,10 +643,10 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
         console.error(`[${cdk}] Error:`, error.message);
         if (error.response) {
             console.error('Response data:', error.response.data);
-            return res.status(error.response.status).json({ 
-                success: false, 
+            return res.status(error.response.status).json({
+                success: false,
                 message: error.response.data?.message || error.message,
-                details: error.response.data 
+                details: error.response.data
             });
         }
         return res.status(500).json({ success: false, message: error.message });
@@ -887,7 +887,7 @@ app.get('/api/health', authenticateToken, async (req, res) => {
 app.get('/api/sla', authenticateToken, async (req, res) => {
     try {
         const now = new Date();
-        const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
+        const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -1068,11 +1068,26 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
             prisma.key.count()
         ]);
 
-        // Subscription stats
-        const [activeSubs, totalSubs] = await Promise.all([
+        // Subscription stats (including orphan keys for consistency with /api/stats/daily)
+        const [activeSubs, totalSubs, orphanKeys] = await Promise.all([
             prisma.subscription.count({ where: { status: 'active' } }),
-            prisma.subscription.count()
+            prisma.subscription.count(),
+            // Orphan keys = used keys with no subscription (same logic as SubscriptionService.getStats)
+            prisma.key.findMany({
+                where: {
+                    status: 'used',
+                    subscriptionId: null,
+                    usedAt: { not: null }
+                },
+                select: { usedAt: true }
+            })
         ]);
+
+        // Calculate orphan active/completed based on 30-day window (same as SubscriptionService)
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const orphanActiveCount = orphanKeys.filter(k => new Date(k.usedAt) > thirtyDaysAgo).length;
+        const totalSubsWithOrphans = totalSubs + orphanKeys.length;
+        const activeSubsWithOrphans = activeSubs + orphanActiveCount;
 
         // Today stats (from keys/subscriptions, считаем по московскому времени)
         const [todayKeys, todayErrorLogs, todaySubs] = await Promise.all([
@@ -1150,7 +1165,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
         res.json({
             keys: { active: activeKeys, used: usedKeys, total: totalKeys },
-            subscriptions: { active: activeSubs, total: totalSubs },
+            subscriptions: { active: activeSubsWithOrphans, total: totalSubsWithOrphans },
             today: { activations: activationsToday, errors: errorsToday, newSubs: newSubsToday },
             sla: { today: slaToday },
             weekChart,
