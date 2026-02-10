@@ -23,6 +23,21 @@ export function Dashboard() {
     const { theme } = useTheme();
     const [isDark, setIsDark] = useState(true);
 
+    // Widget system (must be before any conditional returns)
+    const { widgets, toggleVisibility, reorder, reset: resetWidgets } = useDashboardWidgets();
+    const [showSettings, setShowSettings] = useState(false);
+    const [dragIdx, setDragIdx] = useState<number | null>(null);
+    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+    const settingsRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setShowSettings(false);
+        };
+        if (showSettings) document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [showSettings]);
+
     useEffect(() => {
         const checkDark = () => {
             if (theme === 'dark') return true;
@@ -209,22 +224,6 @@ export function Dashboard() {
         }
         return null;
     };
-
-    const { widgets, toggleVisibility, reorder, reset: resetWidgets } = useDashboardWidgets();
-    const [showSettings, setShowSettings] = useState(false);
-    const [dragIdx, setDragIdx] = useState<number | null>(null);
-    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-    const settingsRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
-            if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setShowSettings(false);
-        };
-        if (showSettings) document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, [showSettings]);
-
-    const isWidgetVisible = (id: string) => widgets.find(w => w.id === id)?.visible ?? true;
 
     // Widget content map
     const widgetContent: Record<string, React.ReactNode> = {
