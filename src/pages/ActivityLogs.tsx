@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { SkeletonLogs } from '../components/Skeleton';
+import { useStickyState } from '../hooks/useStickyState';
 
 export interface LogEntry {
     id: number;
@@ -15,8 +16,8 @@ export interface LogEntry {
 export function ActivityLogs() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filterType, setFilterType] = useState('');
-    const [filterSearch, setFilterSearch] = useState('');
+    const [filterType, setFilterType] = useStickyState('logs-filterType', '');
+    const [filterSearch, setFilterSearch] = useStickyState('logs-filterSearch', '');
 
     useEffect(() => {
         loadLogs();

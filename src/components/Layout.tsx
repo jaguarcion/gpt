@@ -10,7 +10,8 @@ import { useAuthStore } from '../stores/authStore';
 import { CommandPalette } from './CommandPalette';
 import { PullToRefreshIndicator } from './PullToRefreshIndicator';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
-import { ChevronDown, BarChart3, Settings, LogOut, Search } from 'lucide-react';
+import { SSEToastListener } from './SSEToastListener';
+import { ChevronDown, BarChart3, Settings, LogOut, Search, LayoutDashboard, KeyRound, Users, ScrollText, MoreHorizontal } from 'lucide-react';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -139,6 +140,7 @@ export function Layout({ children }: LayoutProps) {
     return (
         <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 flex flex-col">
             <CommandPalette />
+            <SSEToastListener />
             <PullToRefreshIndicator {...pullToRefresh} />
             {/* Header */}
             <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-50">
@@ -193,35 +195,119 @@ export function Layout({ children }: LayoutProps) {
                     </div>
                 </div>
                 
-                {/* Mobile Nav (Horizontal Scroll) */}
-                <div className="md:hidden overflow-x-auto border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
-                    <div className="flex p-2 gap-2 min-w-max">
-                        {allNavItems.map(item => (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`relative px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
-                                    location.pathname === item.path 
-                                        ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-700 shadow-sm' 
-                                        : 'text-zinc-600 dark:text-zinc-400 border border-transparent'
-                                }`}
-                            >
-                                {item.label}
-                                {item.badge && (
-                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500" />
-                                )}
-                            </Link>
-                        ))}
-                    </div>
-                </div>
             </header>
 
             {/* Main Content */}
-            <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-6">
+            <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-6 pb-20 md:pb-6">
                 <PageTransition>
                     {children}
                 </PageTransition>
             </main>
+
+            {/* Mobile Bottom Tab Bar */}
+            <MobileTabBar location={location} />
         </div>
+    );
+}
+
+// ---- Mobile Bottom Tab Bar ----
+
+interface MobileTab {
+    path: string;
+    label: string;
+    icon: React.ReactNode;
+}
+
+function MobileTabBar({ location }: { location: ReturnType<typeof useLocation> }) {
+    const [showMore, setShowMore] = useState(false);
+    const moreRef = useRef<HTMLDivElement>(null);
+
+    const primaryTabs: MobileTab[] = [
+        { path: '/admin', label: 'Дашборд', icon: <LayoutDashboard className="w-5 h-5" /> },
+        { path: '/admin/keys', label: 'Ключи', icon: <KeyRound className="w-5 h-5" /> },
+        { path: '/admin/users', label: 'Юзеры', icon: <Users className="w-5 h-5" /> },
+        { path: '/admin/logs', label: 'Логи', icon: <ScrollText className="w-5 h-5" /> },
+    ];
+
+    const moreTabs: MobileTab[] = [
+        { path: '/admin/stats', label: 'Статистика', icon: <BarChart3 className="w-4 h-4" /> },
+        { path: '/admin/sla', label: 'SLA', icon: <BarChart3 className="w-4 h-4" /> },
+        { path: '/admin/inventory', label: 'Склад', icon: <KeyRound className="w-4 h-4" /> },
+        { path: '/admin/calendar', label: 'Календарь', icon: <BarChart3 className="w-4 h-4" /> },
+        { path: '/admin/health', label: 'Здоровье', icon: <Settings className="w-4 h-4" /> },
+        { path: '/admin/backups', label: 'Бэкапы', icon: <Settings className="w-4 h-4" /> },
+    ];
+
+    const isMoreActive = moreTabs.some(t => location.pathname === t.path);
+
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (moreRef.current && !moreRef.current.contains(e.target as Node)) setShowMore(false);
+        };
+        if (showMore) document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [showMore]);
+
+    useEffect(() => { setShowMore(false); }, [location.pathname]);
+
+    return (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 safe-bottom">
+            <div className="flex items-center justify-around h-14">
+                {primaryTabs.map(tab => {
+                    const active = location.pathname === tab.path;
+                    return (
+                        <Link
+                            key={tab.path}
+                            to={tab.path}
+                            className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+                                active
+                                    ? 'text-blue-600 dark:text-blue-400'
+                                    : 'text-zinc-400 dark:text-zinc-500'
+                            }`}
+                        >
+                            {tab.icon}
+                            <span className="text-[10px] font-medium">{tab.label}</span>
+                        </Link>
+                    );
+                })}
+
+                {/* More button */}
+                <div className="relative flex-1 h-full" ref={moreRef}>
+                    <button
+                        onClick={() => setShowMore(!showMore)}
+                        className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors ${
+                            isMoreActive || showMore
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-zinc-400 dark:text-zinc-500'
+                        }`}
+                    >
+                        <MoreHorizontal className="w-5 h-5" />
+                        <span className="text-[10px] font-medium">Ещё</span>
+                    </button>
+
+                    {showMore && (
+                        <div className="absolute bottom-full right-0 mb-2 mr-1 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl py-1 overflow-hidden">
+                            {moreTabs.map(tab => {
+                                const active = location.pathname === tab.path;
+                                return (
+                                    <Link
+                                        key={tab.path}
+                                        to={tab.path}
+                                        className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                                            active
+                                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium'
+                                                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                                        }`}
+                                    >
+                                        {tab.icon}
+                                        {tab.label}
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </nav>
     );
 }

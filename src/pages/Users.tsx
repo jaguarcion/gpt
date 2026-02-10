@@ -9,6 +9,7 @@ import { SkeletonTable } from '../components/Skeleton';
 import { TableDensityToggle } from '../components/TableDensityToggle';
 import { useTableDensity } from '../hooks/useTableDensity';
 import { useToast } from '../components/Toast';
+import { useStickyState } from '../hooks/useStickyState';
 
 interface Key {
   id: number;
@@ -33,8 +34,8 @@ export function Users() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({
+  const [searchTerm, setSearchTerm] = useStickyState('users-search', '');
+  const [filters, setFilters] = useStickyState('users-filters', {
       status: 'all',
       type: 'all',
       expiring: false,

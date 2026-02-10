@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboard, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
 import { SkeletonDashboard } from '../components/Skeleton';
 import { useTheme } from '../components/ThemeProvider';
+import { useSSE } from '../hooks/useSSE';
+import { useDashboardWidgets } from '../hooks/useDashboardWidgets';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
     Key, Users, ShieldCheck, AlertTriangle, TrendingUp,
-    Zap, CalendarClock, ArrowUpRight, ArrowDownRight
+    Zap, CalendarClock, ArrowUpRight, ArrowDownRight, Wifi, WifiOff,
+    Settings2, GripVertical, Eye, EyeOff, RotateCcw
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -47,6 +50,23 @@ export function Dashboard() {
             localStorage.removeItem('adminToken');
         }
     };
+
+    // SSE live updates
+    const refreshData = useCallback(async () => {
+        try {
+            const d = await getDashboard();
+            setData(d);
+        } catch {
+            // silently ignore refresh errors
+        }
+    }, []);
+
+    const { connected: sseConnected } = useSSE((event) => {
+        // Refresh dashboard on any meaningful event
+        if (['activation', 'renewal', 'error', 'key_added', 'subscription_created', 'subscription_updated', 'subscription_deleted'].includes(event.type)) {
+            refreshData();
+        }
+    });
 
     useEffect(() => {
         const savedToken = localStorage.getItem('adminToken');
@@ -190,6 +210,140 @@ export function Dashboard() {
         return null;
     };
 
+    const { widgets, toggleVisibility, reorder, reset: resetWidgets } = useDashboardWidgets();
+    const [showSettings, setShowSettings] = useState(false);
+    const [dragIdx, setDragIdx] = useState<number | null>(null);
+    const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+    const settingsRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setShowSettings(false);
+        };
+        if (showSettings) document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [showSettings]);
+
+    const isWidgetVisible = (id: string) => widgets.find(w => w.id === id)?.visible ?? true;
+
+    // Widget content map
+    const widgetContent: Record<string, React.ReactNode> = {
+        kpis: (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {kpis.map((kpi, idx) => (
+                    <div
+                        key={idx}
+                        className="bg-white dark:bg-zinc-900/50 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                    >
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm text-zinc-500">{kpi.label}</span>
+                            <div className={`p-2 rounded-lg ${kpi.iconBg}`}>
+                                <span className={kpi.color}>{kpi.icon}</span>
+                            </div>
+                        </div>
+                        <div className={`text-3xl font-bold ${kpi.color}`}>{kpi.value}</div>
+                        <div className="text-xs text-zinc-400 mt-1">{kpi.subtitle}</div>
+                    </div>
+                ))}
+            </div>
+        ),
+        chart: (
+            <div className="bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                        Активации за 7 дней
+                    </h2>
+                    <div className="flex items-center gap-4 text-xs text-zinc-500">
+                        <span className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-sm bg-blue-500" />
+                            Успешные
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <span className="w-2.5 h-2.5 rounded-sm bg-red-400" />
+                            Ошибки
+                        </span>
+                    </div>
+                </div>
+                <div className="h-[240px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data.weekChart} barCategoryGap="20%">
+                            <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                            <XAxis
+                                dataKey="date"
+                                stroke={chartTextColor}
+                                tick={{ fill: chartTextColor, fontSize: 12 }}
+                            />
+                            <YAxis
+                                stroke={chartTextColor}
+                                tick={{ fill: chartTextColor, fontSize: 12 }}
+                                allowDecimals={false}
+                            />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Bar dataKey="activations" name="Успешные" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="errors" name="Ошибки" fill="#f87171" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        ),
+        activity: (
+            <div className="bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col">
+                <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
+                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Последние события</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[320px] divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                    {data.recentLogs.map((log: any) => (
+                        <div key={log.id} className="px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${actionBadge(log.action)}`}>
+                                    {log.action}
+                                </span>
+                                <span className="text-[11px] text-zinc-400 ml-auto whitespace-nowrap">
+                                    {new Date(log.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            </div>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400 truncate">
+                                {log.details}
+                            </p>
+                            {log.email && (
+                                <p className="text-xs text-zinc-400 truncate">{log.email}</p>
+                            )}
+                        </div>
+                    ))}
+                    {data.recentLogs.length === 0 && (
+                        <div className="px-5 py-8 text-center text-zinc-500 text-sm">
+                            Нет событий
+                        </div>
+                    )}
+                </div>
+            </div>
+        ),
+        quicklinks: (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                    { label: 'Управление ключами', path: '/admin/keys', icon: <Key className="w-4 h-4" /> },
+                    { label: 'Пользователи', path: '/admin/users', icon: <Users className="w-4 h-4" /> },
+                    { label: 'Статистика', path: '/admin/stats', icon: <TrendingUp className="w-4 h-4" /> },
+                    { label: 'SLA', path: '/admin/sla', icon: <ShieldCheck className="w-4 h-4" /> },
+                ].map((link) => (
+                    <button
+                        key={link.path}
+                        onClick={() => navigate(link.path)}
+                        className="flex items-center gap-3 p-4 bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-all text-left group"
+                    >
+                        <div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {link.icon}
+                        </div>
+                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
+                            {link.label}
+                        </span>
+                        <ArrowUpRight className="w-4 h-4 ml-auto text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 dark:group-hover:text-zinc-500 transition-colors" />
+                    </button>
+                ))}
+            </div>
+        ),
+    };
+
     return (
         <Layout>
             <div className="max-w-6xl mx-auto space-y-6">
@@ -199,124 +353,75 @@ export function Dashboard() {
                         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Дашборд</h1>
                         <p className="text-sm text-zinc-500 mt-1">Обзор системы на {new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                     </div>
-                </div>
+                    <div className="flex items-center gap-2">
+                        {sseConnected ? (
+                            <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full">
+                                <Wifi className="w-3 h-3" />
+                                Live
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-500/10 px-2.5 py-1 rounded-full">
+                                <WifiOff className="w-3 h-3" />
+                                Offline
+                            </span>
+                        )}
 
-                {/* KPI Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {kpis.map((kpi, idx) => (
-                        <div
-                            key={idx}
-                            className="bg-white dark:bg-zinc-900/50 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
-                        >
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-sm text-zinc-500">{kpi.label}</span>
-                                <div className={`p-2 rounded-lg ${kpi.iconBg}`}>
-                                    <span className={kpi.color}>{kpi.icon}</span>
-                                </div>
-                            </div>
-                            <div className={`text-3xl font-bold ${kpi.color}`}>{kpi.value}</div>
-                            <div className="text-xs text-zinc-400 mt-1">{kpi.subtitle}</div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Chart + Activity Feed */}
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                    {/* Mini Chart (3/5) */}
-                    <div className="lg:col-span-3 bg-white dark:bg-zinc-900/50 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                                Активации за 7 дней
-                            </h2>
-                            <div className="flex items-center gap-4 text-xs text-zinc-500">
-                                <span className="flex items-center gap-1">
-                                    <span className="w-2.5 h-2.5 rounded-sm bg-blue-500" />
-                                    Успешные
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <span className="w-2.5 h-2.5 rounded-sm bg-red-400" />
-                                    Ошибки
-                                </span>
-                            </div>
-                        </div>
-                        <div className="h-[240px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={data.weekChart} barCategoryGap="20%">
-                                    <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                    <XAxis
-                                        dataKey="date"
-                                        stroke={chartTextColor}
-                                        tick={{ fill: chartTextColor, fontSize: 12 }}
-                                    />
-                                    <YAxis
-                                        stroke={chartTextColor}
-                                        tick={{ fill: chartTextColor, fontSize: 12 }}
-                                        allowDecimals={false}
-                                    />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Bar dataKey="activations" name="Успешные" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                    <Bar dataKey="errors" name="Ошибки" fill="#f87171" radius={[4, 4, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    {/* Recent Activity (2/5) */}
-                    <div className="lg:col-span-2 bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col">
-                        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
-                            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Последние события</h2>
-                        </div>
-                        <div className="flex-1 overflow-y-auto max-h-[320px] divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                            {data.recentLogs.map((log: any) => (
-                                <div key={log.id} className="px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${actionBadge(log.action)}`}>
-                                            {log.action}
-                                        </span>
-                                        <span className="text-[11px] text-zinc-400 ml-auto whitespace-nowrap">
-                                            {new Date(log.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
+                        {/* Widget settings */}
+                        <div className="relative" ref={settingsRef}>
+                            <button
+                                onClick={() => setShowSettings(!showSettings)}
+                                className="p-2 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                                title="Настройка виджетов"
+                            >
+                                <Settings2 className="w-4 h-4" />
+                            </button>
+                            {showSettings && (
+                                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 py-2 overflow-hidden">
+                                    <div className="px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Виджеты</span>
+                                        <button onClick={resetWidgets} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 flex items-center gap-1" title="Сбросить">
+                                            <RotateCcw className="w-3 h-3" />
+                                            Сброс
+                                        </button>
                                     </div>
-                                    <p className="text-sm text-zinc-600 dark:text-zinc-400 truncate">
-                                        {log.details}
-                                    </p>
-                                    {log.email && (
-                                        <p className="text-xs text-zinc-400 truncate">{log.email}</p>
-                                    )}
-                                </div>
-                            ))}
-                            {data.recentLogs.length === 0 && (
-                                <div className="px-5 py-8 text-center text-zinc-500 text-sm">
-                                    Нет событий
+                                    {widgets.map((w, idx) => (
+                                        <div
+                                            key={w.id}
+                                            draggable
+                                            onDragStart={() => setDragIdx(idx)}
+                                            onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
+                                            onDrop={() => {
+                                                if (dragIdx !== null && dragIdx !== idx) reorder(dragIdx, idx);
+                                                setDragIdx(null);
+                                                setDragOverIdx(null);
+                                            }}
+                                            onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+                                            className={`flex items-center gap-2 px-4 py-2.5 cursor-grab active:cursor-grabbing transition-colors ${
+                                                dragOverIdx === idx ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                                            }`}
+                                        >
+                                            <GripVertical className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 shrink-0" />
+                                            <span className="text-sm text-zinc-700 dark:text-zinc-300 flex-1">{w.label}</span>
+                                            <button
+                                                onClick={() => toggleVisibility(w.id)}
+                                                className={`p-1 rounded transition-colors ${w.visible ? 'text-blue-500 hover:text-blue-600' : 'text-zinc-300 dark:text-zinc-600 hover:text-zinc-500'}`}
+                                            >
+                                                {w.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Quick Links */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[
-                        { label: 'Управление ключами', path: '/admin/keys', icon: <Key className="w-4 h-4" /> },
-                        { label: 'Пользователи', path: '/admin/users', icon: <Users className="w-4 h-4" /> },
-                        { label: 'Статистика', path: '/admin/stats', icon: <TrendingUp className="w-4 h-4" /> },
-                        { label: 'SLA', path: '/admin/sla', icon: <ShieldCheck className="w-4 h-4" /> },
-                    ].map((link) => (
-                        <button
-                            key={link.path}
-                            onClick={() => navigate(link.path)}
-                            className="flex items-center gap-3 p-4 bg-white dark:bg-zinc-900/50 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-all text-left group"
-                        >
-                            <div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                {link.icon}
-                            </div>
-                            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
-                                {link.label}
-                            </span>
-                            <ArrowUpRight className="w-4 h-4 ml-auto text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500 dark:group-hover:text-zinc-500 transition-colors" />
-                        </button>
-                    ))}
-                </div>
+                {/* Render widgets in saved order */}
+                {widgets.filter(w => w.visible).map(w => (
+                    <div key={w.id}>
+                        {widgetContent[w.id]}
+                    </div>
+                ))}
             </div>
         </Layout>
     );
