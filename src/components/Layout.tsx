@@ -180,9 +180,6 @@ export function Layout({ children }: LayoutProps) {
                             <span>Поиск</span>
                         </button>
                         <TodayWidget />
-                        <div className="hidden sm:block">
-                             <ApiStatusWidget />
-                        </div>
                         <NotificationCenter />
                         <ModeToggle />
                         <button 
