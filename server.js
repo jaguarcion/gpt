@@ -590,8 +590,8 @@ app.post('/api/subscriptions/:id/activate', authenticateToken, async (req, res) 
 app.put('/api/subscriptions/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, type, endDate, status } = req.body;
-        const result = await SubscriptionService.updateSubscription(id, { email, type, endDate, status });
+        const { email, type, endDate, status, note } = req.body;
+        const result = await SubscriptionService.updateSubscription(id, { email, type, endDate, status, note });
 
         await LogService.log('USER_EDIT', `Updated subscription #${id}: ${JSON.stringify(req.body)}`, email, { adminIp: getClientIp(req), source: 'admin' });
 
