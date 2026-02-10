@@ -7,31 +7,55 @@ interface ApiStatus {
     message: string;
 }
 
+// Global singleton: one background check for the entire app
+let globalStatus: ApiStatus | null = null;
+let globalInterval: ReturnType<typeof setInterval> | null = null;
+let listeners: Set<() => void> = new Set();
+
+async function fetchStatus() {
+    try {
+        const token = localStorage.getItem('adminToken');
+        if (!token) return;
+        const response = await axios.get('/api/status', {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 10000
+        });
+        globalStatus = response.data;
+    } catch {
+        globalStatus = { online: false, latency: 0, message: 'Connection Error' };
+    }
+    listeners.forEach(fn => fn());
+}
+
+function startGlobalPolling() {
+    if (globalInterval) return;
+    fetchStatus();
+    globalInterval = setInterval(fetchStatus, 60000); // Once per minute
+}
+
+function stopGlobalPolling() {
+    if (globalInterval && listeners.size === 0) {
+        clearInterval(globalInterval);
+        globalInterval = null;
+    }
+}
+
 export function ApiStatusWidget() {
-    const [status, setStatus] = useState<ApiStatus | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [status, setStatus] = useState<ApiStatus | null>(globalStatus);
 
     useEffect(() => {
-        checkStatus();
-        const interval = setInterval(checkStatus, 30000); // Check every 30s
-        return () => clearInterval(interval);
+        const update = () => setStatus(globalStatus);
+        listeners.add(update);
+        startGlobalPolling();
+
+        // If we already have cached status, use it immediately
+        if (globalStatus) setStatus(globalStatus);
+
+        return () => {
+            listeners.delete(update);
+            stopGlobalPolling();
+        };
     }, []);
-
-    const checkStatus = async () => {
-        try {
-            const token = localStorage.getItem('adminToken');
-            const response = await axios.get('/api/status', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setStatus(response.data);
-        } catch (e) {
-            setStatus({ online: false, latency: 0, message: 'Connection Error' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (loading && !status) return <div className="text-zinc-500 text-xs">Checking API...</div>;
 
     return (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg">
