@@ -700,63 +700,19 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
             return `HTTP ${err.response?.status || '???'}: ${err.message}`;
         };
 
-        // --- STEP 1: CHECK KEY ---
-        console.log(`[${cdk}] Step 1: Checking key...`);
-        let checkRes;
-        try {
-            checkRes = await axios.post(`${BASE_URL}/cdks/public/check`,
-                JSON.stringify({ code: cdk }),
-                { headers: EXTERNAL_API_HEADERS }
-            );
-        } catch (err) {
-            const msg = getApiError(err);
-            console.error(`[${cdk}] Check key failed:`, msg);
-            return res.status(400).json({ success: false, message: `Ошибка проверки ключа: ${msg}` });
-        }
+        // Skip check-key and check-user steps — outstock validates internally.
+        // This saves ~1-2s per activation.
 
-        if (checkRes.data.used) {
-            console.log(`[${cdk}] Key is already used.`);
-            return res.status(400).json({ success: false, message: 'Key is already used' });
-        }
-        console.log(`[${cdk}] Key valid: ${checkRes.data.app_product_name}`);
-
-        // --- STEP 2: CHECK USER SESSION ---
-        console.log(`[${cdk}] Step 2: Checking user session...`);
-        let checkUserRes;
-        try {
-            checkUserRes = await axios.post(`${BASE_URL}/external/public/check-user`,
-                JSON.stringify({ user: sessionPayload, cdk: cdk }),
-                { headers: EXTERNAL_API_HEADERS }
-            );
-        } catch (err) {
-            const msg = getApiError(err);
-            console.error(`[${cdk}] Check user failed:`, msg);
-            return res.status(400).json({ success: false, message: `Сессия недействительна: ${msg}` });
-        }
-
-        const userCheck = checkUserRes.data;
-        if (!userCheck.verified) {
-            console.log(`[${cdk}] User verification failed.`);
-            return res.status(400).json({ success: false, message: 'User session verification failed' });
-        }
-        if (userCheck.has_sub) {
-            console.log(`[${cdk}] User already has active subscription.`);
-            return res.status(400).json({ success: false, message: 'User already has an active subscription' });
-        }
-        console.log(`[${cdk}] User verified: ${userCheck.user}`);
-
-        // --- STEP 3: REQUEST ACTIVATION (OUTSTOCK) ---
-        console.log(`[${cdk}] Step 3: Requesting activation...`);
+        // --- REQUEST ACTIVATION (OUTSTOCK) ---
+        console.log(`[${cdk}] Requesting activation (outstock)...`);
         const outstockBody = JSON.stringify({ cdk: cdk, user: sessionPayload });
-        console.log(`[${cdk}] Outstock body preview:`, outstockBody.substring(0, 200) + '...');
         let activateRes;
         try {
             activateRes = await axios.post(`${BASE_URL}/stocks/public/outstock`,
                 outstockBody,
                 {
                     headers: {
-                        'X-Product-ID': 'chatgpt',
-                        'Content-Type': 'text/plain;charset=UTF-8',
+                        ...EXTERNAL_API_HEADERS,
                         'Referer': 'https://receipt.nitro.xin/',
                         'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Brave";v="144"',
                         'sec-ch-ua-mobile': '?0',
@@ -767,21 +723,12 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
                         'Sec-GPC': '1',
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
                         'X-Device-Id': 'web'
-                    },
-                    validateStatus: () => true
+                    }
                 }
             );
-            console.log(`[${cdk}] Outstock response status: ${activateRes.status}, data type: ${typeof activateRes.data}, data:`, JSON.stringify(activateRes.data)?.substring(0, 500));
-
-            if (activateRes.status >= 400) {
-                const d = activateRes.data;
-                const msg = (typeof d === 'string' && d.length > 0) ? d : (d?.error || d?.message || `HTTP ${activateRes.status}`);
-                console.error(`[${cdk}] Outstock failed:`, msg);
-                return res.status(400).json({ success: false, message: `Ошибка активации: ${msg}` });
-            }
         } catch (err) {
             const msg = getApiError(err);
-            console.error(`[${cdk}] Outstock request error:`, msg);
+            console.error(`[${cdk}] Outstock failed:`, msg);
             return res.status(400).json({ success: false, message: `Ошибка активации: ${msg}` });
         }
 
@@ -793,12 +740,11 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
         console.log(`[${cdk}] Task ID received: ${taskId}. Starting poll...`);
 
-        // --- STEP 4: POLL STATUS ---
-        let isPending = true;
+        // --- POLL STATUS (return as soon as success=true) ---
         let attempts = 0;
         const maxAttempts = 120; // 2 minutes (120 * 1s)
 
-        while (isPending && attempts < maxAttempts) {
+        while (attempts < maxAttempts) {
             await sleep(1000);
             attempts++;
 
@@ -809,22 +755,21 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
             console.log(`[${cdk}] Poll ${attempts}: pending=${status.pending}, success=${status.success}`);
 
-            if (!status.pending || status.success === true) {
-                isPending = false;
-                if (status.success) {
-                    console.log(`[${cdk}] Activation SUCCESS!`);
-                    return res.json({ success: true, message: 'Successfully activated', data: status });
-                } else {
-                    console.log(`[${cdk}] Activation FAILED: ${status.message}`);
-                    return res.status(400).json({ success: false, message: status.message || 'Activation failed', data: status });
-                }
+            // Return immediately on success, even if pending is still true
+            if (status.success === true) {
+                console.log(`[${cdk}] Activation SUCCESS!`);
+                return res.json({ success: true, message: 'Successfully activated', data: status });
+            }
+
+            // If not pending anymore and not success — it's a failure
+            if (!status.pending) {
+                console.log(`[${cdk}] Activation FAILED: ${status.message}`);
+                return res.status(400).json({ success: false, message: status.message || 'Activation failed', data: status });
             }
         }
 
-        if (isPending) {
-            console.log(`[${cdk}] Timeout waiting for activation.`);
-            return res.status(504).json({ success: false, message: 'Activation timed out' });
-        }
+        console.log(`[${cdk}] Timeout waiting for activation.`);
+        return res.status(504).json({ success: false, message: 'Activation timed out' });
 
     } catch (error) {
         console.error(`[${cdk}] Error:`, error.message);
