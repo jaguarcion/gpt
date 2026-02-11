@@ -14,6 +14,8 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useScrollRestore } from '../hooks/useScrollRestore';
 import { useSortable } from '../hooks/useSortable';
 import { SortableHeader } from '../components/SortableHeader';
+import { InlineEdit } from '../components/InlineEdit';
+import { RelativeTime } from '../components/RelativeTime';
 
 interface Key {
   id: number;
@@ -72,6 +74,7 @@ export function Users() {
       { key: 'status', label: 'Статус' },
       { key: 'startDate', label: 'Дата старта' },
       { key: 'endDate', label: 'Дата окончания' },
+      { key: 'progress', label: 'Прогресс' },
       { key: 'keys', label: 'Ключи' },
       { key: 'actions', label: 'Действия', required: true },
   ];
@@ -140,6 +143,17 @@ export function Users() {
           loadData();
       } catch (e: any) {
           toast.error('Ошибка обновления: ' + (e.response?.data?.error || e.message));
+      }
+  };
+
+  const handleInlineUpdate = async (id: number, field: string, value: string) => {
+      try {
+          await updateSubscription(id, { [field]: value });
+          setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+          toast.success('Обновлено');
+      } catch (e: any) {
+          toast.error('Ошибка: ' + (e.response?.data?.error || e.message));
+          throw e; // rethrow so InlineEdit stays in edit mode
       }
   };
 
@@ -491,6 +505,7 @@ export function Users() {
                     {isColVisible('status') && <SortableHeader label="Статус" sortKey="status" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
                     {isColVisible('startDate') && <SortableHeader label="Дата старта" sortKey="startDate" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
                     {isColVisible('endDate') && <th className={headerPadding}>Дата окончания</th>}
+                    {isColVisible('progress') && <th className={headerPadding}>Прогресс</th>}
                     {isColVisible('keys') && <th className={headerPadding}>Ключи</th>}
                     {isColVisible('actions') && <th className={`${headerPadding} text-right`}>Действия</th>}
                 </tr>
@@ -514,7 +529,9 @@ export function Users() {
                             className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </td>}
-                    {isColVisible('email') && <td className={`${cellPadding} font-medium text-zinc-900 dark:text-white`}>{sub.email}</td>}
+                    {isColVisible('email') && <td className={`${cellPadding} font-medium text-zinc-900 dark:text-white`}>
+                        <InlineEdit value={sub.email} onSave={(v) => handleInlineUpdate(sub.id, 'email', v)} />
+                    </td>}
                     {isColVisible('type') && <td className={cellPadding}>
                         <span className={`px-2 py-1 rounded text-xs ${
                             sub.type === '3m' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 
@@ -525,16 +542,7 @@ export function Users() {
                         </span>
                     </td>}
                     {isColVisible('note') && <td className={cellPadding}>
-                        {sub.note ? (
-                            <div className="group/note relative">
-                                <svg className="w-4 h-4 text-yellow-500 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                <div className="absolute left-0 bottom-full mb-2 hidden group-hover/note:block w-48 p-2 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 shadow-xl z-10 whitespace-normal">
-                                    {sub.note}
-                                </div>
-                            </div>
-                        ) : (
-                            <span className="text-zinc-400 dark:text-zinc-600">-</span>
-                        )}
+                        <InlineEdit value={sub.note || ''} onSave={(v) => handleInlineUpdate(sub.id, 'note', v)} placeholder="добавить..." />
                     </td>}
                     {isColVisible('status') && <td className={cellPadding}>
                         <span className={`px-2 py-1 rounded text-xs ${
@@ -545,11 +553,31 @@ export function Users() {
                         </span>
                     </td>}
                     {isColVisible('startDate') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>
-                        {new Date(sub.startDate).toLocaleDateString()}
+                        <RelativeTime date={sub.startDate} />
                     </td>}
                     {isColVisible('endDate') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>
-                        {endDate.toLocaleDateString()}
+                        <RelativeTime date={endDate} />
                     </td>}
+                    {isColVisible('progress') && (() => {
+                        const startMs = new Date(sub.startDate).getTime();
+                        const endMs = endDate.getTime();
+                        const nowMs = now.getTime();
+                        const total = endMs - startMs;
+                        const elapsed = nowMs - startMs;
+                        const pct = total > 0 ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 100;
+                        const daysLeft = Math.max(0, Math.ceil((endMs - nowMs) / 86400000));
+                        const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-green-500';
+                        return (
+                            <td className={cellPadding}>
+                                <div className="flex items-center gap-2 min-w-[100px]">
+                                    <div className="flex-1 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                        <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                                    </div>
+                                    <span className="text-[10px] text-zinc-500 whitespace-nowrap tabular-nums">{daysLeft}д</span>
+                                </div>
+                            </td>
+                        );
+                    })()}
                     {isColVisible('keys') && <td className={cellPadding}>
                         <div className="flex flex-col gap-1">
                             {sub.keys.map(k => (

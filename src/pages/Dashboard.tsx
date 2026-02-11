@@ -146,6 +146,15 @@ export function Dashboard() {
     const weekActivations = data.weekChart.reduce((s: number, d: any) => s + d.activations, 0);
     const weekErrors = data.weekChart.reduce((s: number, d: any) => s + d.errors, 0);
 
+    // Extract sparkline data from weekChart
+    const sparkActivations = data.weekChart.map((d: any) => d.activations);
+    const sparkErrors = data.weekChart.map((d: any) => d.errors);
+    const sparkTotal = data.weekChart.map((d: any) => d.activations + d.errors);
+    const sparkSLA = data.weekChart.map((d: any) => {
+        const total = d.activations + d.errors;
+        return total > 0 ? (d.activations / total) * 100 : 100;
+    });
+
     const kpis = [
         {
             label: 'Доступные ключи',
@@ -170,6 +179,8 @@ export function Dashboard() {
             icon: <ShieldCheck className="w-5 h-5" />,
             color: data.sla.today >= 99 ? 'text-green-600 dark:text-green-400' : data.sla.today >= 95 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400',
             iconBg: data.sla.today >= 99 ? 'bg-green-500/10' : data.sla.today >= 95 ? 'bg-yellow-500/10' : 'bg-red-500/10',
+            sparkData: sparkSLA,
+            sparkColor: '#22c55e',
         },
         {
             label: 'Ошибки сегодня',
@@ -178,6 +189,8 @@ export function Dashboard() {
             icon: <AlertTriangle className="w-5 h-5" />,
             color: data.today.errors === 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400',
             iconBg: data.today.errors === 0 ? 'bg-green-500/10' : 'bg-red-500/10',
+            sparkData: sparkErrors,
+            sparkColor: '#ef4444',
         },
         {
             label: 'Активаций сегодня',
@@ -186,6 +199,8 @@ export function Dashboard() {
             icon: <Zap className="w-5 h-5" />,
             color: 'text-purple-600 dark:text-purple-400',
             iconBg: 'bg-purple-500/10',
+            sparkData: sparkActivations,
+            sparkColor: '#a855f7',
         },
         {
             label: 'Продления (7 дн.)',

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAnimatedCounter } from '../hooks/useAnimatedCounter';
+import { Sparkline } from './Sparkline';
 
 interface AnimatedKPIProps {
     label: string;
@@ -8,9 +9,11 @@ interface AnimatedKPIProps {
     icon: React.ReactNode;
     color: string;
     iconBg: string;
+    sparkData?: number[];
+    sparkColor?: string;
 }
 
-export function AnimatedKPI({ label, value, subtitle, icon, color, iconBg }: AnimatedKPIProps) {
+export function AnimatedKPI({ label, value, subtitle, icon, color, iconBg, sparkData, sparkColor }: AnimatedKPIProps) {
     const isNumeric = typeof value === 'number';
     const isPercent = typeof value === 'string' && value.endsWith('%');
     const numericValue = isPercent ? parseFloat(value) : (isNumeric ? value : 0);
@@ -29,7 +32,12 @@ export function AnimatedKPI({ label, value, subtitle, icon, color, iconBg }: Ani
                     <span className={color}>{icon}</span>
                 </div>
             </div>
-            <div className={`text-3xl font-bold tabular-nums ${color}`}>{displayValue}</div>
+            <div className="flex items-end justify-between gap-2">
+                <div className={`text-3xl font-bold tabular-nums ${color}`}>{displayValue}</div>
+                {sparkData && sparkData.length >= 2 && (
+                    <Sparkline data={sparkData} color={sparkColor || '#3b82f6'} width={72} height={28} />
+                )}
+            </div>
             <div className="text-xs text-zinc-400 mt-1">{subtitle}</div>
         </div>
     );

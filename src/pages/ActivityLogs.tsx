@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout';
 import { ApiStatusWidget } from '../components/ApiStatusWidget';
 import { SkeletonLogs } from '../components/Skeleton';
 import { useStickyState } from '../hooks/useStickyState';
+import { RelativeTime } from '../components/RelativeTime';
 
 export interface LogEntry {
     id: number;
@@ -102,8 +103,7 @@ export function ActivityLogs() {
                             logs.map(log => (
                                 <div key={log.id} className="flex gap-4 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 p-2 rounded transition-colors border-b border-zinc-100 dark:border-zinc-800/30 last:border-0">
                                     <span className="text-zinc-500 dark:text-zinc-600 whitespace-nowrap w-24">
-                                        {new Date(log.createdAt).toLocaleTimeString()}
-                                        <div className="text-[10px] opacity-60">{new Date(log.createdAt).toLocaleDateString()}</div>
+                                        <RelativeTime date={log.createdAt} className="text-xs" />
                                     </span>
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">

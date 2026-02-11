@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast';
 import { useScrollRestore } from '../hooks/useScrollRestore';
 import { useSortable } from '../hooks/useSortable';
 import { SortableHeader } from '../components/SortableHeader';
+import { RelativeTime } from '../components/RelativeTime';
 
 export function AdminPanel() {
   const [loading, setLoading] = useState(true);
@@ -275,7 +276,7 @@ export function AdminPanel() {
                         </span>
                     </td>}
                     {isColVisible('usedBy') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>{key.usedByEmail || '-'}</td>}
-                    {isColVisible('createdAt') && <td className={`${cellPadding} text-zinc-500`}>{new Date(key.createdAt).toLocaleDateString()}</td>}
+                    {isColVisible('createdAt') && <td className={`${cellPadding} text-zinc-500`}><RelativeTime date={key.createdAt} /></td>}
                     {isColVisible('actions') && <td className={`${cellPadding} text-right`}>
                         <button 
                             onClick={() => handleDeleteKey(key.id)}
