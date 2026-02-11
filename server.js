@@ -692,12 +692,27 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
             }
         }
 
+        // Helper: extract error message from API response
+        const getApiError = (err) => {
+            const d = err.response?.data;
+            if (typeof d === 'string' && d.length > 0) return d;
+            if (d && typeof d === 'object') return d.error || d.message || JSON.stringify(d);
+            return `HTTP ${err.response?.status || '???'}: ${err.message}`;
+        };
+
         // --- STEP 1: CHECK KEY ---
         console.log(`[${cdk}] Step 1: Checking key...`);
-        const checkRes = await axios.post(`${BASE_URL}/cdks/public/check`,
-            JSON.stringify({ code: cdk }),
-            { headers: EXTERNAL_API_HEADERS }
-        );
+        let checkRes;
+        try {
+            checkRes = await axios.post(`${BASE_URL}/cdks/public/check`,
+                JSON.stringify({ code: cdk }),
+                { headers: EXTERNAL_API_HEADERS }
+            );
+        } catch (err) {
+            const msg = getApiError(err);
+            console.error(`[${cdk}] Check key failed:`, msg);
+            return res.status(400).json({ success: false, message: `Ошибка проверки ключа: ${msg}` });
+        }
 
         if (checkRes.data.used) {
             console.log(`[${cdk}] Key is already used.`);
@@ -707,10 +722,17 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
         // --- STEP 2: CHECK USER SESSION ---
         console.log(`[${cdk}] Step 2: Checking user session...`);
-        const checkUserRes = await axios.post(`${BASE_URL}/external/public/check-user`,
-            JSON.stringify({ user: sessionPayload, cdk: cdk }),
-            { headers: EXTERNAL_API_HEADERS }
-        );
+        let checkUserRes;
+        try {
+            checkUserRes = await axios.post(`${BASE_URL}/external/public/check-user`,
+                JSON.stringify({ user: sessionPayload, cdk: cdk }),
+                { headers: EXTERNAL_API_HEADERS }
+            );
+        } catch (err) {
+            const msg = getApiError(err);
+            console.error(`[${cdk}] Check user failed:`, msg);
+            return res.status(400).json({ success: false, message: `Сессия недействительна: ${msg}` });
+        }
 
         const userCheck = checkUserRes.data;
         if (!userCheck.verified) {
@@ -725,10 +747,19 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
         // --- STEP 3: REQUEST ACTIVATION (OUTSTOCK) ---
         console.log(`[${cdk}] Step 3: Requesting activation...`);
-        const activateRes = await axios.post(`${BASE_URL}/stocks/public/outstock`,
-            JSON.stringify({ cdk: cdk, user: sessionPayload }),
-            { headers: EXTERNAL_API_HEADERS }
-        );
+        const outstockBody = JSON.stringify({ cdk: cdk, user: sessionPayload });
+        console.log(`[${cdk}] Outstock body length: ${outstockBody.length}, user field type: ${typeof sessionPayload}, user length: ${sessionPayload.length}`);
+        let activateRes;
+        try {
+            activateRes = await axios.post(`${BASE_URL}/stocks/public/outstock`,
+                outstockBody,
+                { headers: EXTERNAL_API_HEADERS }
+            );
+        } catch (err) {
+            const msg = getApiError(err);
+            console.error(`[${cdk}] Outstock failed:`, msg);
+            return res.status(400).json({ success: false, message: `Ошибка активации: ${msg}` });
+        }
 
         const taskId = activateRes.data; // API returns UUID string directly
         if (!taskId || typeof taskId !== 'string') {
