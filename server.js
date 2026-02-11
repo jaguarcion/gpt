@@ -748,12 +748,18 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
         // --- STEP 3: REQUEST ACTIVATION (OUTSTOCK) ---
         console.log(`[${cdk}] Step 3: Requesting activation...`);
         const outstockBody = JSON.stringify({ cdk: cdk, user: sessionPayload });
-        console.log(`[${cdk}] Outstock body length: ${outstockBody.length}, user field type: ${typeof sessionPayload}, user length: ${sessionPayload.length}`);
+        console.log(`[${cdk}] Outstock body preview:`, outstockBody.substring(0, 200) + '...');
         let activateRes;
         try {
             activateRes = await axios.post(`${BASE_URL}/stocks/public/outstock`,
                 outstockBody,
-                { headers: EXTERNAL_API_HEADERS, validateStatus: () => true }
+                {
+                    headers: {
+                        'X-Product-ID': 'chatgpt',
+                        'Content-Type': 'application/json'
+                    },
+                    validateStatus: () => true
+                }
             );
             console.log(`[${cdk}] Outstock response status: ${activateRes.status}, data type: ${typeof activateRes.data}, data:`, JSON.stringify(activateRes.data)?.substring(0, 500));
 
