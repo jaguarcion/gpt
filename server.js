@@ -532,29 +532,48 @@ app.get('/api/sessions/active', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/status', authenticateToken, async (req, res) => {
+// Cached external API check — max once per 5 minutes
+let _extCache = { online: false, latency: 0, checkedAt: 0 };
+const EXT_CHECK_URL = 'https://receipt.nitro.xin/redeem/chatgpt';
+const EXT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function checkExternalCached() {
+    const now = Date.now();
+    if (now - _extCache.checkedAt < EXT_CACHE_TTL) return _extCache;
+
     try {
         const start = Date.now();
-        // Check main page instead of specific API endpoint to avoid 404
-        const response = await axios.get(`${BASE_URL}`, {
+        await axios.head(EXT_CHECK_URL, {
             timeout: 5000,
-            headers: EXTERNAL_API_HEADERS
+            headers: { 'X-Product-ID': 'chatgpt' },
+            validateStatus: (s) => s < 500 // 2xx, 3xx, 4xx = server alive
         });
-        const duration = Date.now() - start;
-
-        res.json({
-            online: true,
-            latency: duration,
-            message: 'API Online'
-        });
-    } catch (e) {
-        console.error('API Status Check Error:', e.message);
-        res.json({
-            online: false,
-            latency: 0,
-            message: e.message || 'API Unreachable'
-        });
+        _extCache = { online: true, latency: Date.now() - start, checkedAt: now };
+    } catch {
+        _extCache = { online: false, latency: 0, checkedAt: now };
     }
+    return _extCache;
+}
+
+app.get('/api/status', authenticateToken, async (req, res) => {
+    // Local backend is online if this endpoint responds
+    let dbOk = false;
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        dbOk = true;
+    } catch { /* db down */ }
+
+    // External API — cached, max 1 request per 5 min
+    const ext = await checkExternalCached();
+
+    res.json({
+        online: true,
+        db: dbOk,
+        external: ext.online,
+        externalLatency: ext.latency,
+        uptime: Math.floor(process.uptime()),
+        message: dbOk ? 'Backend Online' : 'Backend Online (DB Error)'
+    });
 });
 
 // New Endpoint for Bot/Admin to create subscription and activate
