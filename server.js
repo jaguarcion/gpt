@@ -183,7 +183,13 @@ const authLimiter = rateLimit({
 // Only protect the activation endpoint (external-facing, most sensitive)
 app.use('/api/sessions/activate', authLimiter);
 
-const BASE_URL = 'https://freespaces.gmailshop.top';
+const BASE_URL = 'https://receipt-api.nitro.xin';
+
+// Common headers for external activation API
+const EXTERNAL_API_HEADERS = {
+    'X-Product-ID': 'chatgpt',
+    'Content-Type': 'text/plain;charset=UTF-8'
+};
 
 // Utility to wait
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -532,7 +538,7 @@ app.get('/api/status', authenticateToken, async (req, res) => {
         // Check main page instead of specific API endpoint to avoid 404
         const response = await axios.get(`${BASE_URL}`, {
             timeout: 5000,
-            headers: { 'x-product-id': 'chatgpt' }
+            headers: EXTERNAL_API_HEADERS
         });
         const duration = Date.now() - start;
 
@@ -674,32 +680,11 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
     console.log(`[${new Date().toISOString()}] Received activation request for key: ${cdk}`);
 
     try {
-        // --- OPTIMIZATION: Skipped separate key check to save time. 
-        // The activation request handles validation internally or returns error.
-        /*
-        // --- STEP 1: CHECK KEY ---
-        console.log(`[${cdk}] Step 1: Checking key...`);
-        const checkRes = await axios.post(`${BASE_URL}/api/cdks/public/check`, 
-            { code: cdk },
-            { headers: { 'x-product-id': 'chatgpt', 'Content-Type': 'application/json' } }
-        );
-
-        if (checkRes.data.used) {
-            console.log(`[${cdk}] Key is already used.`);
-            return res.status(400).json({ success: false, message: 'Key is already used' });
-        }
-        */
-
-        // --- STEP 2: REQUEST ACTIVATION ---
-        console.log(`[${cdk}] Step 1: Requesting activation...`);
-
-        // Ensure sessionJson is a string (if passed as object, stringify it)
-        // The API expects the 'user' field to be the JSON string of the session
+        // Ensure sessionJson is a string
         let sessionPayload = sessionJson;
         if (typeof sessionJson === 'object') {
             sessionPayload = JSON.stringify(sessionJson);
         } else {
-            // Validate it's valid JSON if it's a string
             try {
                 JSON.parse(sessionJson);
             } catch (e) {
@@ -707,9 +692,42 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
             }
         }
 
-        const activateRes = await axios.post(`${BASE_URL}/api/stocks/public/outstock`,
-            { cdk: cdk, user: sessionPayload },
-            { headers: { 'Content-Type': 'application/json' } }
+        // --- STEP 1: CHECK KEY ---
+        console.log(`[${cdk}] Step 1: Checking key...`);
+        const checkRes = await axios.post(`${BASE_URL}/cdks/public/check`,
+            JSON.stringify({ code: cdk }),
+            { headers: EXTERNAL_API_HEADERS }
+        );
+
+        if (checkRes.data.used) {
+            console.log(`[${cdk}] Key is already used.`);
+            return res.status(400).json({ success: false, message: 'Key is already used' });
+        }
+        console.log(`[${cdk}] Key valid: ${checkRes.data.app_product_name}`);
+
+        // --- STEP 2: CHECK USER SESSION ---
+        console.log(`[${cdk}] Step 2: Checking user session...`);
+        const checkUserRes = await axios.post(`${BASE_URL}/external/public/check-user`,
+            JSON.stringify({ user: sessionPayload, cdk: cdk }),
+            { headers: EXTERNAL_API_HEADERS }
+        );
+
+        const userCheck = checkUserRes.data;
+        if (!userCheck.verified) {
+            console.log(`[${cdk}] User verification failed.`);
+            return res.status(400).json({ success: false, message: 'User session verification failed' });
+        }
+        if (userCheck.has_sub) {
+            console.log(`[${cdk}] User already has active subscription.`);
+            return res.status(400).json({ success: false, message: 'User already has an active subscription' });
+        }
+        console.log(`[${cdk}] User verified: ${userCheck.user}`);
+
+        // --- STEP 3: REQUEST ACTIVATION (OUTSTOCK) ---
+        console.log(`[${cdk}] Step 3: Requesting activation...`);
+        const activateRes = await axios.post(`${BASE_URL}/stocks/public/outstock`,
+            JSON.stringify({ cdk: cdk, user: sessionPayload }),
+            { headers: EXTERNAL_API_HEADERS }
         );
 
         const taskId = activateRes.data; // API returns UUID string directly
@@ -720,22 +738,22 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
         console.log(`[${cdk}] Task ID received: ${taskId}. Starting poll...`);
 
-        // --- STEP 3: POLL STATUS ---
+        // --- STEP 4: POLL STATUS ---
         let isPending = true;
         let attempts = 0;
         const maxAttempts = 120; // 2 minutes (120 * 1s)
 
         while (isPending && attempts < maxAttempts) {
-            // Wait 1s instead of 2s for faster feedback
             await sleep(1000);
             attempts++;
 
-            const statusRes = await axios.get(`${BASE_URL}/api/stocks/public/outstock/${taskId}`);
+            const statusRes = await axios.get(`${BASE_URL}/stocks/public/outstock/${taskId}`, {
+                headers: EXTERNAL_API_HEADERS
+            });
             const status = statusRes.data;
 
             console.log(`[${cdk}] Poll ${attempts}: pending=${status.pending}, success=${status.success}`);
 
-            // If success is true, we can return early even if pending is true
             if (!status.pending || status.success === true) {
                 isPending = false;
                 if (status.success) {

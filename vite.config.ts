@@ -7,18 +7,24 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   server: {
     proxy: {
-      // 1. External API (Manual Activation)
+      // 1. External API (Manual Activation) — nitro.xin (strip /api prefix)
       '/api/cdks': {
-        target: 'https://freespaces.gmailshop.top',
+        target: 'https://receipt-api.nitro.xin',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path
+        rewrite: (path) => path.replace(/^\/api/, '')
       },
       '/api/stocks': {
-        target: 'https://freespaces.gmailshop.top',
+        target: 'https://receipt-api.nitro.xin',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/api/external': {
+        target: 'https://receipt-api.nitro.xin',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
       },
       // 2. Local Backend (Admin API & Bot)
       '/api/subscriptions': {
