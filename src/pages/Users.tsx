@@ -426,7 +426,7 @@ export function Users() {
                                     sub.type === '2m' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
                                     'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                                 }`}>
-                                    {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
+                                    {sub.type === '3m' ? '3м' : (sub.type === '2m' ? '2м' : '1м')}
                                 </span>
                             </div>
 
@@ -538,7 +538,7 @@ export function Users() {
                             sub.type === '2m' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
                             'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                         }`}>
-                        {sub.type === '3m' ? '3 Месяца' : (sub.type === '2m' ? '2 Месяца' : '1 Месяц')}
+                        {sub.type === '3m' ? '3м' : (sub.type === '2m' ? '2м' : '1м')}
                         </span>
                     </td>}
                     {isColVisible('note') && <td className={cellPadding}>
@@ -556,7 +556,9 @@ export function Users() {
                         <RelativeTime date={sub.startDate} />
                     </td>}
                     {isColVisible('endDate') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>
-                        <RelativeTime date={endDate} />
+                        <span title={endDate.toLocaleString('ru-RU')}>
+                            {endDate.toLocaleDateString('ru-RU')}
+                        </span>
                     </td>}
                     {isColVisible('progress') && (() => {
                         const startMs = new Date(sub.startDate).getTime();
