@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription, deleteSubscription } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { EditUserModal } from '../components/EditUserModal';
@@ -10,6 +10,10 @@ import { TableDensityToggle } from '../components/TableDensityToggle';
 import { useTableDensity } from '../hooks/useTableDensity';
 import { useToast } from '../components/Toast';
 import { useStickyState } from '../hooks/useStickyState';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useScrollRestore } from '../hooks/useScrollRestore';
+import { useSortable } from '../hooks/useSortable';
+import { SortableHeader } from '../components/SortableHeader';
 
 interface Key {
   id: number;
@@ -49,13 +53,15 @@ export function Users() {
   const [editingUser, setEditingUser] = useState<Subscription | null>(null);
   const [viewingHistoryEmail, setViewingHistoryEmail] = useState<string | null>(null);
   
-  // Pagination
-  const [page, setPage] = useState(1);
+  // Pagination (persisted)
+  const [page, setPage] = useStickyState('users-page', 1);
   const [limit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
 
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  useScrollRestore();
 
   // Column customization
   const userColumns: Column[] = [
@@ -108,7 +114,13 @@ export function Users() {
   };
 
   const handleManualActivate = async (id: number) => {
-      if (!window.confirm('Вы уверены, что хотите принудительно активировать следующий период для этой подписки?')) return;
+      const ok = await confirm({
+          title: 'Принудительная активация',
+          message: 'Вы уверены, что хотите принудительно активировать следующий период для этой подписки?',
+          confirmText: 'Активировать',
+          variant: 'warning',
+      });
+      if (!ok) return;
       
       try {
           await manualActivateSubscription(id);
@@ -131,20 +143,43 @@ export function Users() {
       }
   };
 
+  const deletedRef = useRef<Set<number>>(new Set());
+
   const handleDeleteUser = async (id: number) => {
-      if (!window.confirm('Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.')) return;
-      try {
-          await deleteSubscription(id);
-          toast.success('Пользователь удалён');
+      // Optimistic delete with undo
+      deletedRef.current.add(id);
+      setSubscriptions(prev => prev.filter(s => s.id !== id));
+
+      let undone = false;
+      toast.undo('Пользователь удалён', () => {
+          undone = true;
+          deletedRef.current.delete(id);
           loadData();
-      } catch (e: any) {
-          toast.error('Ошибка удаления: ' + (e.response?.data?.error || e.message));
-      }
+      });
+
+      // After grace period, actually delete
+      setTimeout(async () => {
+          if (undone) return;
+          try {
+              await deleteSubscription(id);
+              deletedRef.current.delete(id);
+          } catch (e: any) {
+              deletedRef.current.delete(id);
+              toast.error('Ошибка удаления: ' + (e.response?.data?.error || e.message));
+              loadData();
+          }
+      }, 5500);
   };
 
   const handleBulkDelete = async () => {
       if (selectedUsers.length === 0) return;
-      if (!window.confirm(`Удалить выбранных пользователей (${selectedUsers.length})?`)) return;
+      const ok = await confirm({
+          title: 'Массовое удаление',
+          message: `Удалить выбранных пользователей (${selectedUsers.length})? Это действие нельзя отменить.`,
+          confirmText: 'Удалить',
+          variant: 'danger',
+      });
+      if (!ok) return;
       
       try {
           for (const id of selectedUsers) {
@@ -207,9 +242,7 @@ export function Users() {
       document.body.removeChild(link);
   };
 
-  const filteredSubscriptions = subscriptions.filter(sub => 
-      sub.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const { sorted: sortedSubscriptions, sortKey, sortDirection, toggleSort } = useSortable(subscriptions);
 
   return (
     <Layout>
@@ -452,18 +485,18 @@ export function Users() {
                             className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </th>}
-                    {isColVisible('email') && <th className={headerPadding}>Email</th>}
-                    {isColVisible('type') && <th className={headerPadding}>Тип</th>}
+                    {isColVisible('email') && <SortableHeader label="Email" sortKey="email" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
+                    {isColVisible('type') && <SortableHeader label="Тип" sortKey="type" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
                     {isColVisible('note') && <th className={headerPadding}>Заметка</th>}
-                    {isColVisible('status') && <th className={headerPadding}>Статус</th>}
-                    {isColVisible('startDate') && <th className={headerPadding}>Дата старта</th>}
+                    {isColVisible('status') && <SortableHeader label="Статус" sortKey="status" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
+                    {isColVisible('startDate') && <SortableHeader label="Дата старта" sortKey="startDate" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
                     {isColVisible('endDate') && <th className={headerPadding}>Дата окончания</th>}
                     {isColVisible('keys') && <th className={headerPadding}>Ключи</th>}
                     {isColVisible('actions') && <th className={`${headerPadding} text-right`}>Действия</th>}
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {subscriptions.map((sub) => {
+                {sortedSubscriptions.map((sub) => {
                     const start = new Date(sub.startDate);
                     const monthsToAdd = sub.type === '3m' ? 3 : (sub.type === '2m' ? 2 : 1);
                     const endDate = new Date(start.setMonth(start.getMonth() + monthsToAdd));

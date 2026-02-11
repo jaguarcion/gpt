@@ -16,12 +16,14 @@ import { Calendar } from './pages/Calendar';
 import { Changelog } from './pages/Changelog';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ToastProvider } from './components/Toast';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <ToastProvider>
+        <ConfirmProvider>
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -40,6 +42,7 @@ function App() {
             <Route path="/admin/changelog" element={<ProtectedRoute><Changelog /></ProtectedRoute>} />
           </Routes>
         </BrowserRouter>
+        </ConfirmProvider>
       </ToastProvider>
     </ThemeProvider>
   );

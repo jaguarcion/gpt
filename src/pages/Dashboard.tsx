@@ -12,6 +12,8 @@ import {
     Zap, CalendarClock, ArrowUpRight, ArrowDownRight, Wifi, WifiOff,
     Settings2, GripVertical, Eye, EyeOff, RotateCcw
 } from 'lucide-react';
+import { useScrollRestore } from '../hooks/useScrollRestore';
+import { AnimatedKPI } from '../components/AnimatedKPI';
 
 export function Dashboard() {
     const [token, setToken] = useState('');
@@ -22,6 +24,7 @@ export function Dashboard() {
     const navigate = useNavigate();
     const { theme } = useTheme();
     const [isDark, setIsDark] = useState(true);
+    useScrollRestore();
 
     // Widget system (must be before any conditional returns)
     const { widgets, toggleVisibility, reorder, reset: resetWidgets } = useDashboardWidgets();
@@ -230,19 +233,7 @@ export function Dashboard() {
         kpis: (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {kpis.map((kpi, idx) => (
-                    <div
-                        key={idx}
-                        className="bg-white dark:bg-zinc-900/50 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
-                    >
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm text-zinc-500">{kpi.label}</span>
-                            <div className={`p-2 rounded-lg ${kpi.iconBg}`}>
-                                <span className={kpi.color}>{kpi.icon}</span>
-                            </div>
-                        </div>
-                        <div className={`text-3xl font-bold ${kpi.color}`}>{kpi.value}</div>
-                        <div className="text-xs text-zinc-400 mt-1">{kpi.subtitle}</div>
-                    </div>
+                    <AnimatedKPI key={idx} {...kpi} />
                 ))}
             </div>
         ),

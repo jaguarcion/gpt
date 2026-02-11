@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
 import { Layout } from '../components/Layout';
@@ -7,6 +7,9 @@ import { SkeletonCards, SkeletonTable } from '../components/Skeleton';
 import { TableDensityToggle } from '../components/TableDensityToggle';
 import { useTableDensity } from '../hooks/useTableDensity';
 import { useToast } from '../components/Toast';
+import { useScrollRestore } from '../hooks/useScrollRestore';
+import { useSortable } from '../hooks/useSortable';
+import { SortableHeader } from '../components/SortableHeader';
 
 export function AdminPanel() {
   const [loading, setLoading] = useState(true);
@@ -14,6 +17,7 @@ export function AdminPanel() {
   const [keys, setKeys] = useState<any[]>([]);
   const [newKeyCodes, setNewKeyCodes] = useState('');
   const navigate = useNavigate();
+  useScrollRestore();
   
   // New states for pagination and filtering
   const [page, setPage] = useState(1);
@@ -84,15 +88,31 @@ export function AdminPanel() {
     }
   };
   
+  const deletedKeysRef = useRef<Set<number>>(new Set());
+
   const handleDeleteKey = async (id: number) => {
-      if (!window.confirm('Вы уверены, что хотите удалить этот ключ?')) return;
-      try {
-          await deleteKey(id);
-          toast.success('Ключ удалён');
+      // Optimistic delete with undo
+      deletedKeysRef.current.add(id);
+      setKeys(prev => prev.filter(k => k.id !== id));
+
+      let undone = false;
+      toast.undo('Ключ удалён', () => {
+          undone = true;
+          deletedKeysRef.current.delete(id);
           loadData();
-      } catch (e: any) {
-          toast.error('Ошибка при удалении');
-      }
+      });
+
+      setTimeout(async () => {
+          if (undone) return;
+          try {
+              await deleteKey(id);
+              deletedKeysRef.current.delete(id);
+          } catch (e: any) {
+              deletedKeysRef.current.delete(id);
+              toast.error('Ошибка при удалении');
+              loadData();
+          }
+      }, 5500);
   };
 
   const handleExportCSV = async () => {
@@ -138,6 +158,8 @@ export function AdminPanel() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
+
+  const { sorted: sortedKeys, sortKey, sortDirection, toggleSort } = useSortable(keys);
 
   if (loading) {
     return (
@@ -226,16 +248,16 @@ export function AdminPanel() {
             <table className={`w-full text-left ${fontSize}`}>
                 <thead className={`bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs sticky top-0 z-10`}>
                 <tr>
-                    {isColVisible('id') && <th className={headerPadding}>ID</th>}
-                    {isColVisible('code') && <th className={headerPadding}>Code</th>}
-                    {isColVisible('status') && <th className={headerPadding}>Status</th>}
-                    {isColVisible('usedBy') && <th className={headerPadding}>Used By</th>}
-                    {isColVisible('createdAt') && <th className={headerPadding}>Created At</th>}
+                    {isColVisible('id') && <SortableHeader label="ID" sortKey="id" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
+                    {isColVisible('code') && <SortableHeader label="Code" sortKey="code" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
+                    {isColVisible('status') && <SortableHeader label="Status" sortKey="status" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
+                    {isColVisible('usedBy') && <SortableHeader label="Used By" sortKey="usedByEmail" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
+                    {isColVisible('createdAt') && <SortableHeader label="Created At" sortKey="createdAt" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
                     {isColVisible('actions') && <th className={headerPadding}></th>}
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {keys.map((key) => (
+                {sortedKeys.map((key) => (
                     <tr key={key.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                     {isColVisible('id') && <td className={`${cellPadding} font-mono text-zinc-500`}>{key.id}</td>}
                     {isColVisible('code') && <td className={`${cellPadding} font-mono text-zinc-700 dark:text-zinc-300`}>

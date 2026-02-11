@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
 import { SkeletonTable } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 interface Backup {
     name: string;
@@ -18,6 +19,7 @@ export function Backups() {
     const [error, setError] = useState('');
     const navigate = useNavigate();
     const toast = useToast();
+    const confirm = useConfirm();
 
     useEffect(() => {
         const token = localStorage.getItem('adminToken');
@@ -55,7 +57,13 @@ export function Backups() {
     };
 
     const handleDeleteBackup = async (filename: string) => {
-        if (!window.confirm(`Удалить бэкап ${filename}?`)) return;
+        const ok = await confirm({
+            title: 'Удалить бэкап',
+            message: `Удалить бэкап ${filename}?`,
+            confirmText: 'Удалить',
+            variant: 'danger',
+        });
+        if (!ok) return;
         try {
             await deleteBackup(filename);
             toast.success('Бэкап удалён');

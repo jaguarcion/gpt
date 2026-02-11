@@ -2,7 +2,12 @@ import React from 'react';
 
 function Pulse({ className, style }: { className?: string; style?: React.CSSProperties }) {
     return (
-        <div className={`animate-pulse bg-zinc-200 dark:bg-zinc-800 rounded ${className || ''}`} style={style} />
+        <div
+            className={`relative overflow-hidden bg-zinc-200 dark:bg-zinc-800 rounded ${className || ''}`}
+            style={style}
+        >
+            <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 dark:via-white/5 to-transparent" />
+        </div>
     );
 }
 
