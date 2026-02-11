@@ -553,7 +553,7 @@ export function Users() {
                         </span>
                     </td>}
                     {isColVisible('startDate') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>
-                        <RelativeTime date={sub.startDate} />
+                        {new Date(sub.startDate).toLocaleDateString('ru-RU')}
                     </td>}
                     {isColVisible('endDate') && <td className={`${cellPadding} text-zinc-600 dark:text-zinc-400`}>
                         <span title={endDate.toLocaleString('ru-RU')}>
