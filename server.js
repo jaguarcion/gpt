@@ -753,11 +753,19 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
         try {
             activateRes = await axios.post(`${BASE_URL}/stocks/public/outstock`,
                 outstockBody,
-                { headers: EXTERNAL_API_HEADERS }
+                { headers: EXTERNAL_API_HEADERS, validateStatus: () => true }
             );
+            console.log(`[${cdk}] Outstock response status: ${activateRes.status}, data type: ${typeof activateRes.data}, data:`, JSON.stringify(activateRes.data)?.substring(0, 500));
+
+            if (activateRes.status >= 400) {
+                const d = activateRes.data;
+                const msg = (typeof d === 'string' && d.length > 0) ? d : (d?.error || d?.message || `HTTP ${activateRes.status}`);
+                console.error(`[${cdk}] Outstock failed:`, msg);
+                return res.status(400).json({ success: false, message: `Ошибка активации: ${msg}` });
+            }
         } catch (err) {
             const msg = getApiError(err);
-            console.error(`[${cdk}] Outstock failed:`, msg);
+            console.error(`[${cdk}] Outstock request error:`, msg);
             return res.status(400).json({ success: false, message: `Ошибка активации: ${msg}` });
         }
 
