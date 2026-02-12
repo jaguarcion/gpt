@@ -32,12 +32,14 @@ model Key {
 
 // Session Model
 model Session {
-  id            Int            @id @default(autoincrement())
-  email         String
-  sessionJson   String         // Stored as stringified JSON because SQLite doesn't support JSON type natively well in all Prisma versions, string is safer
-  expiresAt     DateTime
-  telegramId    BigInt
-  createdAt     DateTime       @default(now())
+  id               Int            @id @default(autoincrement())
+  email            String
+  sessionJson      String         // Stored as stringified JSON because SQLite doesn't support JSON type natively well in all Prisma versions, string is safer
+  expiresAt        DateTime
+  telegramId       BigInt
+  sessionStatus    String?        // "valid", "expired", "invalid", "revoked"
+  sessionCheckedAt DateTime?
+  createdAt        DateTime       @default(now())
   
   @@index([email])
   @@index([telegramId])

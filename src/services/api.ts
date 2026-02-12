@@ -214,3 +214,19 @@ export const saveSettings = async (settings: any) => {
   const response = await adminApi.post('/settings', settings);
   return response.data;
 };
+
+// Session Validation API
+export const validateSession = async (email: string) => {
+  const response = await adminApi.post(`/sessions/${encodeURIComponent(email)}/validate`);
+  return response.data;
+};
+
+export const getSessionStatuses = async (emails: string[]) => {
+  const response = await adminApi.post('/sessions/statuses', { emails });
+  return response.data;
+};
+
+export const validateAllSessions = async () => {
+  const response = await adminApi.post('/sessions/validate-all');
+  return response.data;
+};

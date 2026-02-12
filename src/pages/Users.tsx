@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription, deleteSubscription } from '../services/api';
+import { getSubscriptions, setAuthToken, manualActivateSubscription, updateSubscription, deleteSubscription, validateSession, getSessionStatuses } from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { EditUserModal } from '../components/EditUserModal';
 import { UserHistoryModal } from '../components/UserHistoryModal';
@@ -62,6 +62,8 @@ export function Users() {
     const [limit] = useState(20);
     const [totalPages, setTotalPages] = useState(1);
     const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
+    const [sessionStatuses, setSessionStatuses] = useState<Record<string, { status: string; checkedAt: string | null; expiresAt: string | null }>>({});
+    const [validatingEmail, setValidatingEmail] = useState<string | null>(null);
 
     const navigate = useNavigate();
     const confirm = useConfirm();
@@ -78,6 +80,7 @@ export function Users() {
         { key: 'endDate', label: 'Дата окончания' },
         { key: 'progress', label: 'Прогресс' },
         { key: 'keys', label: 'Ключи' },
+        { key: 'session', label: 'Сессия' },
         { key: 'actions', label: 'Действия', required: true },
     ];
     const { visible: visibleCols, toggle: toggleCol, isVisible: isColVisible, reset: resetCols } = useColumnVisibility('users', userColumns);
@@ -104,6 +107,15 @@ export function Users() {
             const data = await getSubscriptions(page, limit, searchTerm, filters);
             setSubscriptions(data.subscriptions);
             setTotalPages(data.totalPages);
+
+            // Load session statuses for loaded users
+            const emails = data.subscriptions.map((s: Subscription) => s.email);
+            if (emails.length > 0) {
+                try {
+                    const statuses = await getSessionStatuses(emails);
+                    setSessionStatuses(statuses);
+                } catch { /* silently fail */ }
+            }
         } catch (e: any) {
             setError(e.message || 'Ошибка загрузки данных');
             if (e.response?.status === 401) {
@@ -111,6 +123,24 @@ export function Users() {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleValidateSession = async (email: string) => {
+        setValidatingEmail(email);
+        try {
+            const result = await validateSession(email);
+            setSessionStatuses(prev => ({ ...prev, [email]: { status: result.status, checkedAt: result.checkedAt, expiresAt: null } }));
+            const labels: Record<string, string> = { valid: 'Валидна', expired: 'Истекла', revoked: 'Отозвана', invalid: 'Невалидна', no_session: 'Нет сессии' };
+            if (result.status === 'valid') {
+                toast.success(`Сессия ${email}: ${labels[result.status] || result.status}`);
+            } else {
+                toast.error(`Сессия ${email}: ${labels[result.status] || result.status} — ${result.details}`);
+            }
+        } catch (e: any) {
+            toast.error('Ошибка проверки: ' + (e.message || 'unknown'));
+        } finally {
+            setValidatingEmail(null);
         }
     };
 
@@ -515,6 +545,7 @@ export function Users() {
                                             {isColVisible('endDate') && <th className={headerPadding}>Дата окончания</th>}
                                             {isColVisible('progress') && <th className={headerPadding}>Прогресс</th>}
                                             {isColVisible('keys') && <th className={headerPadding}>Ключи</th>}
+                                            {isColVisible('session') && <th className={headerPadding}>Сессия</th>}
                                             {isColVisible('actions') && <th className={`${headerPadding} text-right`}>Действия</th>}
                                         </tr>
                                     </thead>
@@ -598,6 +629,46 @@ export function Users() {
                                                             ))}
                                                             {sub.keys.length === 0 && <span className="text-zinc-400 dark:text-zinc-600">-</span>}
                                                         </div>
+                                                    </td>}
+                                                    {isColVisible('session') && <td className={cellPadding}>
+                                                        {(() => {
+                                                            const ss = sessionStatuses[sub.email];
+                                                            const status = ss?.status || 'unchecked';
+                                                            const isChecking = validatingEmail === sub.email;
+                                                            const colors: Record<string, string> = {
+                                                                valid: 'bg-green-500/10 text-green-600 dark:text-green-400',
+                                                                expired: 'bg-red-500/10 text-red-600 dark:text-red-400',
+                                                                revoked: 'bg-red-500/10 text-red-600 dark:text-red-400',
+                                                                invalid: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+                                                                no_session: 'bg-zinc-500/10 text-zinc-500',
+                                                                unchecked: 'bg-zinc-500/10 text-zinc-400',
+                                                            };
+                                                            const labels: Record<string, string> = {
+                                                                valid: 'OK', expired: 'Истекла', revoked: 'Отозвана',
+                                                                invalid: 'Ошибка', no_session: 'Нет', unchecked: '—',
+                                                            };
+                                                            return (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${colors[status] || colors.unchecked}`}
+                                                                        title={ss?.checkedAt ? `Проверено: ${new Date(ss.checkedAt).toLocaleString()}` : 'Не проверено'}
+                                                                    >
+                                                                        {labels[status] || status}
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => handleValidateSession(sub.email)}
+                                                                        disabled={isChecking}
+                                                                        className="text-zinc-400 hover:text-blue-500 transition-colors p-0.5 disabled:opacity-40"
+                                                                        title="Проверить сессию"
+                                                                    >
+                                                                        {isChecking ? (
+                                                                            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                                                        ) : (
+                                                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                                        )}
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </td>}
                                                     {isColVisible('actions') && <td className={`${cellPadding} text-right flex justify-end gap-2 items-center`}>
                                                         <button

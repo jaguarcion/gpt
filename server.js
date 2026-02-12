@@ -14,6 +14,7 @@ import { KeyService } from './services/keyService.js';
 import { SessionService } from './services/sessionService.js';
 import { LogService } from './services/logService.js';
 import { SubscriptionService } from './services/subscriptionService.js';
+import { SessionValidationService } from './services/sessionValidationService.js';
 import eventBus, { emitEvent, EVENTS } from './services/eventBus.js';
 import './backup_service.js';
 
@@ -901,7 +902,27 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
             }
         }
 
-        // 4. Expiring subscriptions (within 3 days)
+        // 4. Invalid sessions for active users
+        const invalidSessions = await prisma.session.findMany({
+            where: {
+                sessionStatus: { in: ['expired', 'revoked', 'invalid'] },
+                email: { in: (await prisma.subscription.findMany({ where: { status: 'active' }, select: { email: true } })).map(s => s.email) }
+            },
+            orderBy: { sessionCheckedAt: 'desc' }
+        });
+        invalidSessions.forEach(s => {
+            const statusLabels = { expired: 'истекла', revoked: 'отозвана', invalid: 'невалидна' };
+            notifications.push({
+                id: `session-${s.id}`,
+                type: s.sessionStatus === 'revoked' ? 'error' : 'warning',
+                title: `Сессия ${statusLabels[s.sessionStatus] || 'проблемная'}`,
+                message: `Сессия для ${s.email} ${statusLabels[s.sessionStatus] || 'имеет проблемы'}. Продление может не сработать.`,
+                email: s.email,
+                createdAt: s.sessionCheckedAt || s.createdAt
+            });
+        });
+
+        // 5. Expiring subscriptions (within 3 days)
         const activeSubs = await prisma.subscription.findMany({ where: { status: 'active' } });
         const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
         let expiringCount = 0;
@@ -941,6 +962,45 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
         res.json(notifications);
     } catch (e) {
         console.error('Notifications Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ===================== SESSION VALIDATION =====================
+
+// Validate a single session by email (manual check from admin UI)
+app.post('/api/sessions/:email/validate', authenticateToken, async (req, res) => {
+    try {
+        const { email } = req.params;
+        const result = await SessionValidationService.validateSession(email, { deepCheck: true });
+        res.json(result);
+    } catch (e) {
+        console.error('Session Validation Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Get session statuses for multiple emails (bulk, for table display)
+app.post('/api/sessions/statuses', authenticateToken, async (req, res) => {
+    try {
+        const { emails } = req.body;
+        const statuses = await SessionValidationService.getSessionStatuses(emails || []);
+        res.json(statuses);
+    } catch (e) {
+        console.error('Session Statuses Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Trigger bulk validation manually (admin action)
+app.post('/api/sessions/validate-all', authenticateToken, async (req, res) => {
+    try {
+        // Run in background, return immediately
+        res.json({ started: true, message: 'Валидация запущена в фоне' });
+        SessionValidationService.validateUpcomingSessions().catch(err => {
+            console.error('[SessionValidator] Background validation error:', err.message);
+        });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
@@ -1467,6 +1527,16 @@ app.post('/api/queue/run', authenticateToken, async (req, res) => {
 cron.schedule('0 10 * * *', async () => {
     console.log('[Cron] Running scheduled activations...');
     await SubscriptionService.processScheduledActivations();
+});
+
+// Session validation cron — every 12 hours (at 3:00 and 15:00)
+cron.schedule('0 3,15 * * *', async () => {
+    console.log('[Cron] Running session validation...');
+    try {
+        await SessionValidationService.validateUpcomingSessions();
+    } catch (e) {
+        console.error('[Cron] Session validation error:', e.message);
+    }
 });
 
 // --- Database Explorer API ---
