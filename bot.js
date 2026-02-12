@@ -6,7 +6,7 @@ dotenv.config();
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_TOKEN = process.env.API_TOKEN;
-const API_URL = `http://localhost:${process.env.PORT || 3001}/api/sessions/activate`;
+const API_URL = `http://127.0.0.1:${process.env.PORT || 3001}/api/sessions/activate`;
 
 // Parse allowed users from .env (comma-separated IDs)
 const ALLOWED_USERS = (process.env.ALLOWED_TELEGRAM_USERS || '')

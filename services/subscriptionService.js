@@ -33,7 +33,7 @@ const notifyAdmins = async (message) => {
 
 // Local API URL for activation requests (calls the existing /api/activate-key endpoint)
 // We reuse the existing activation logic which handles the external API interaction
-const ACTIVATE_API_URL = `http://localhost:${process.env.PORT || 3001}/api/activate-key`;
+const ACTIVATE_API_URL = `http://127.0.0.1:${process.env.PORT || 3001}/api/activate-key`;
 const API_TOKEN = process.env.API_TOKEN;
 
 // In-memory lock to prevent race conditions for same user

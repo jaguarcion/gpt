@@ -28,12 +28,12 @@ export default defineConfig({
       },
       // 2. Local Backend (Admin API & Bot)
       '/api/subscriptions': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         secure: false,
       },
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path
@@ -43,13 +43,13 @@ export default defineConfig({
   build: {
     sourcemap: 'hidden',
     rollupOptions: {
-        output: {
-            manualChunks: {
-                vendor: ['react', 'react-dom', 'react-router-dom'],
-                charts: ['recharts'],
-                ui: ['lucide-react', 'clsx', 'tailwind-merge']
-            }
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          ui: ['lucide-react', 'clsx', 'tailwind-merge']
         }
+      }
     }
   },
   plugins: [
