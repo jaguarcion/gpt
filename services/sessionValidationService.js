@@ -1,9 +1,16 @@
+import axios from 'axios';
+import dotenv from 'dotenv';
 import prisma from './db.js';
 import { decrypt } from './encryptionService.js';
 import { LogService } from './logService.js';
 import { emitEvent, EVENTS } from './eventBus.js';
 
+dotenv.config();
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const CHECK_USER_URL = 'https://receipt-api.nitro.xin/external/public/check-user';
+const VALIDATION_CDK = process.env.VALIDATION_CDK || '0W66D6T1ERSMB';
 
 export class SessionValidationService {
 
@@ -12,8 +19,8 @@ export class SessionValidationService {
      * Steps:
      *  1. Check session exists
      *  2. Structural check (JSON parseable, has accessToken + expires)
-     *  3. Check expires date
-     *  4. (Optional) Ping OpenAI /backend-api/me with accessToken
+     *  3. Check local expiry dates
+     *  4. Remote check via receipt-api check-user endpoint
      *
      * Returns: { status, details, checkedAt }
      *   status: 'valid' | 'expired' | 'invalid' | 'revoked' | 'no_session'
@@ -32,10 +39,11 @@ export class SessionValidationService {
         }
 
         // 2. Decrypt and parse
+        let decryptedRaw;
         let parsed;
         try {
-            const decrypted = decrypt(session.sessionJson);
-            parsed = typeof decrypted === 'string' ? JSON.parse(decrypted) : decrypted;
+            decryptedRaw = decrypt(session.sessionJson);
+            parsed = typeof decryptedRaw === 'string' ? JSON.parse(decryptedRaw) : decryptedRaw;
         } catch {
             await this._saveStatus(session.id, 'invalid', now);
             return { status: 'invalid', details: 'Невалидный JSON', checkedAt: now };
@@ -62,24 +70,42 @@ export class SessionValidationService {
             return { status: 'expired', details: `Сессия истекла ${session.expiresAt.toISOString()}`, checkedAt: now };
         }
 
-        // 5. Check how old the accessToken is (JWT decode exp if possible)
+        // 5. Remote check via receipt-api check-user
         try {
-            const parts = parsed.accessToken.split('.');
-            if (parts.length === 3) {
-                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-                if (payload.exp) {
-                    const expDate = new Date(payload.exp * 1000);
-                    if (expDate < now) {
-                        await this._saveStatus(session.id, 'expired', now);
-                        return { status: 'expired', details: `JWT accessToken истёк ${expDate.toISOString()}`, checkedAt: now };
-                    }
-                }
-            }
-        } catch { /* not a JWT or can't decode — skip */ }
+            // Send the raw session JSON string as the "user" field (same format as activation)
+            const sessionStr = typeof decryptedRaw === 'string' ? decryptedRaw : JSON.stringify(parsed);
+            const body = JSON.stringify({ user: sessionStr, cdk: VALIDATION_CDK });
 
-        // All checks passed
-        await this._saveStatus(session.id, 'valid', now);
-        return { status: 'valid', details: 'Структура и срок OK', checkedAt: now };
+            const response = await axios.post(CHECK_USER_URL, body, {
+                headers: {
+                    'X-Product-ID': 'chatgpt',
+                    'Content-Type': 'text/plain;charset=UTF-8',
+                },
+                timeout: 15000,
+                validateStatus: () => true,
+            });
+
+            if (response.status === 200 && response.data) {
+                const data = response.data;
+                if (data.verified === true) {
+                    await this._saveStatus(session.id, 'valid', now);
+                    return { status: 'valid', details: `Верифицирована (${data.user || email})`, checkedAt: now };
+                } else {
+                    await this._saveStatus(session.id, 'revoked', now);
+                    return { status: 'revoked', details: `Сессия не прошла проверку (verified: ${data.verified})`, checkedAt: now };
+                }
+            } else {
+                // API error — don't change status
+                const currentStatus = session.sessionStatus || 'unchecked';
+                await this._saveStatus(session.id, currentStatus, now);
+                return { status: currentStatus, details: `API вернул HTTP ${response.status} — статус не изменён`, checkedAt: now };
+            }
+        } catch (err) {
+            // Network error — don't change status
+            const currentStatus = session.sessionStatus || 'unchecked';
+            await this._saveStatus(session.id, currentStatus, now);
+            return { status: currentStatus, details: `Ошибка сети: ${err.message} — статус не изменён`, checkedAt: now };
+        }
     }
 
     /**
@@ -144,7 +170,10 @@ export class SessionValidationService {
                 console.error(`[SessionValidator] Error validating ${email}:`, err.message);
             }
 
-            // No external requests — all checks are local, no pause needed
+            // Pause between external API checks to avoid rate limits
+            if (i < emails.length - 1) {
+                await sleep(5000);
+            }
         }
 
         const summary = `Проверено: ${emails.length}, валидных: ${validCount}, проблемных: ${invalidCount}`;
