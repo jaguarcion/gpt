@@ -1,10 +1,8 @@
-import axios from 'axios';
 import prisma from './db.js';
 import { decrypt } from './encryptionService.js';
 import { LogService } from './logService.js';
 import { emitEvent, EVENTS } from './eventBus.js';
 
-const CHATGPT_ME_URL = 'https://chatgpt.com/backend-api/me';
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export class SessionValidationService {
@@ -20,7 +18,7 @@ export class SessionValidationService {
      * Returns: { status, details, checkedAt }
      *   status: 'valid' | 'expired' | 'invalid' | 'revoked' | 'no_session'
      */
-    static async validateSession(email, { deepCheck = true } = {}) {
+    static async validateSession(email) {
         const now = new Date();
 
         // 1. Find session
@@ -64,39 +62,22 @@ export class SessionValidationService {
             return { status: 'expired', details: `Сессия истекла ${session.expiresAt.toISOString()}`, checkedAt: now };
         }
 
-        // 5. Deep check — ping OpenAI API
-        if (deepCheck) {
-            try {
-                const response = await axios.get(CHATGPT_ME_URL, {
-                    headers: {
-                        'Authorization': `Bearer ${parsed.accessToken}`,
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
-                    },
-                    timeout: 15000,
-                    validateStatus: () => true, // Don't throw on non-2xx
-                });
-
-                if (response.status === 200 && response.data?.email) {
-                    await this._saveStatus(session.id, 'valid', now);
-                    return { status: 'valid', details: `OK (${response.data.email})`, checkedAt: now };
-                } else if (response.status === 401 || response.status === 403) {
-                    await this._saveStatus(session.id, 'revoked', now);
-                    return { status: 'revoked', details: `Токен отозван (HTTP ${response.status})`, checkedAt: now };
-                } else {
-                    // Non-critical error (rate limit, server error) — don't change status
-                    const currentStatus = session.sessionStatus || 'valid';
-                    await this._saveStatus(session.id, currentStatus, now);
-                    return { status: currentStatus, details: `API вернул HTTP ${response.status} — статус не изменён`, checkedAt: now };
+        // 5. Check how old the accessToken is (JWT decode exp if possible)
+        try {
+            const parts = parsed.accessToken.split('.');
+            if (parts.length === 3) {
+                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+                if (payload.exp) {
+                    const expDate = new Date(payload.exp * 1000);
+                    if (expDate < now) {
+                        await this._saveStatus(session.id, 'expired', now);
+                        return { status: 'expired', details: `JWT accessToken истёк ${expDate.toISOString()}`, checkedAt: now };
+                    }
                 }
-            } catch (err) {
-                // Network error — don't change status
-                const currentStatus = session.sessionStatus || 'valid';
-                await this._saveStatus(session.id, currentStatus, now);
-                return { status: currentStatus, details: `Ошибка сети: ${err.message} — статус не изменён`, checkedAt: now };
             }
-        }
+        } catch { /* not a JWT or can't decode — skip */ }
 
-        // Shallow check passed
+        // All checks passed
         await this._saveStatus(session.id, 'valid', now);
         return { status: 'valid', details: 'Структура и срок OK', checkedAt: now };
     }
@@ -151,7 +132,7 @@ export class SessionValidationService {
         for (let i = 0; i < emails.length; i++) {
             const email = emails[i];
             try {
-                const result = await this.validateSession(email, { deepCheck: true });
+                const result = await this.validateSession(email);
                 console.log(`[SessionValidator] [${i + 1}/${emails.length}] ${email}: ${result.status} — ${result.details}`);
 
                 if (result.status === 'valid') {
@@ -163,10 +144,7 @@ export class SessionValidationService {
                 console.error(`[SessionValidator] Error validating ${email}:`, err.message);
             }
 
-            // Pause between checks (skip pause on last item)
-            if (i < emails.length - 1) {
-                await sleep(5000);
-            }
+            // No external requests — all checks are local, no pause needed
         }
 
         const summary = `Проверено: ${emails.length}, валидных: ${validCount}, проблемных: ${invalidCount}`;

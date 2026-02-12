@@ -972,7 +972,7 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
 app.post('/api/sessions/:email/validate', authenticateToken, async (req, res) => {
     try {
         const { email } = req.params;
-        const result = await SessionValidationService.validateSession(email, { deepCheck: true });
+        const result = await SessionValidationService.validateSession(email);
         res.json(result);
     } catch (e) {
         console.error('Session Validation Error:', e.message);
@@ -995,6 +995,11 @@ app.post('/api/sessions/statuses', authenticateToken, async (req, res) => {
 // Trigger bulk validation manually (admin action)
 app.post('/api/sessions/validate-all', authenticateToken, async (req, res) => {
     try {
+        // Reset false 'revoked' statuses from previous broken deep check
+        await prisma.session.updateMany({
+            where: { sessionStatus: 'revoked' },
+            data: { sessionStatus: null, sessionCheckedAt: null }
+        });
         // Run in background, return immediately
         res.json({ started: true, message: 'Валидация запущена в фоне' });
         SessionValidationService.validateUpcomingSessions().catch(err => {
