@@ -107,7 +107,6 @@ export function Layout({ children }: LayoutProps) {
         { path: '/admin', label: 'Дашборд' },
         { path: '/admin/keys', label: 'Ключи' },
         { path: '/admin/users', label: 'Пользователи' },
-        { path: '/admin/queue', label: 'Очередь', badge: true },
         {
             label: 'Аналитика',
             icon: <BarChart3 className="w-4 h-4" />,
@@ -122,6 +121,7 @@ export function Layout({ children }: LayoutProps) {
             label: 'Система',
             icon: <Settings className="w-4 h-4" />,
             items: [
+                { path: '/admin/queue', label: 'Очередь', badge: true },
                 { path: '/admin/logs', label: 'Логи' },
                 { path: '/admin/health', label: 'Состояние системы' },
                 { path: '/admin/backups', label: 'Бэкапы' },
