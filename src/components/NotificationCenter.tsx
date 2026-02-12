@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { getNotifications, setAuthToken } from '../services/api';
 import { Bell, X, AlertTriangle, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { timeAgo } from '../lib/timeAgo';
 
 interface Notification {
     id: string;
@@ -13,15 +14,38 @@ interface Notification {
 
 const STORAGE_KEY = 'notifications-last-read';
 
+function getDayGroup(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today.getTime() - 86400000);
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (d.getTime() === today.getTime()) return 'Сегодня';
+    if (d.getTime() === yesterday.getTime()) return 'Вчера';
+    return 'Ранее';
+}
+
+function groupByDay(notifications: Notification[]): Map<string, Notification[]> {
+    const groups = new Map<string, Notification[]>();
+    for (const n of notifications) {
+        const key = getDayGroup(n.createdAt);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(n);
+    }
+    return groups;
+}
+
 export function NotificationCenter() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [open, setOpen] = useState(false);
+    const [visible, setVisible] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         loadNotifications();
-        const interval = setInterval(loadNotifications, 30000); // Poll every 30s
+        const interval = setInterval(loadNotifications, 30000);
         return () => clearInterval(interval);
     }, []);
 
@@ -29,7 +53,7 @@ export function NotificationCenter() {
     useEffect(() => {
         const handleClick = (e: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-                setOpen(false);
+                handleClose();
             }
         };
         if (open) document.addEventListener('mousedown', handleClick);
@@ -61,12 +85,19 @@ export function NotificationCenter() {
     };
 
     const handleOpen = () => {
-        setOpen(!open);
-        if (!open) {
-            // Mark all as read when opening
+        if (open) {
+            handleClose();
+        } else {
+            setOpen(true);
+            requestAnimationFrame(() => setVisible(true));
             localStorage.setItem(STORAGE_KEY, new Date().toISOString());
             setUnreadCount(0);
         }
+    };
+
+    const handleClose = () => {
+        setVisible(false);
+        setTimeout(() => setOpen(false), 150);
     };
 
     const getIcon = (type: string) => {
@@ -87,18 +118,7 @@ export function NotificationCenter() {
         }
     };
 
-    const timeAgo = (dateStr: string) => {
-        const now = new Date();
-        const date = new Date(dateStr);
-        const diffMs = now.getTime() - date.getTime();
-        const diffMin = Math.floor(diffMs / 60000);
-        if (diffMin < 1) return 'только что';
-        if (diffMin < 60) return `${diffMin} мин. назад`;
-        const diffHrs = Math.floor(diffMin / 60);
-        if (diffHrs < 24) return `${diffHrs} ч. назад`;
-        const diffDays = Math.floor(diffHrs / 24);
-        return `${diffDays} дн. назад`;
-    };
+    const groups = groupByDay(notifications);
 
     return (
         <div className="relative" ref={dropdownRef}>
@@ -118,12 +138,12 @@ export function NotificationCenter() {
 
             {/* Dropdown */}
             {open && (
-                <div className="absolute right-0 top-full mt-2 w-96 max-h-[480px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
+                <div className={`absolute right-0 top-full mt-2 w-96 max-h-[480px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden transition-all duration-150 origin-top-right ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-1'}`}>
                     {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/80">
                         <h3 className="font-semibold text-zinc-900 dark:text-white text-sm">Уведомления</h3>
                         <button
-                            onClick={() => setOpen(false)}
+                            onClick={handleClose}
                             className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
                         >
                             <X className="w-4 h-4" />
@@ -138,26 +158,35 @@ export function NotificationCenter() {
                                 Нет уведомлений
                             </div>
                         ) : (
-                            notifications.map(n => (
-                                <div
-                                    key={n.id}
-                                    className={`px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors border-l-2 ${getBorderColor(n.type)}`}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="mt-0.5">
-                                            {getIcon(n.type)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-medium text-sm text-zinc-900 dark:text-white">{n.title}</span>
-                                                <span className="text-[10px] text-zinc-400 whitespace-nowrap">{timeAgo(n.createdAt)}</span>
-                                            </div>
-                                            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 break-words">{n.message}</p>
-                                            {n.email && (
-                                                <span className="text-[10px] text-zinc-400 mt-1 block font-mono">{n.email}</span>
-                                            )}
-                                        </div>
+                            Array.from(groups.entries()).map(([group, items]) => (
+                                <div key={group}>
+                                    {/* Day group header */}
+                                    <div className="px-4 py-1.5 bg-zinc-50 dark:bg-zinc-800/50 sticky top-0 z-10">
+                                        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{group}</span>
                                     </div>
+                                    {items.map((n, idx) => (
+                                        <div
+                                            key={n.id}
+                                            className={`px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors border-l-2 ${getBorderColor(n.type)}`}
+                                            style={{ animationDelay: `${idx * 30}ms` }}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <div className="mt-0.5">
+                                                    {getIcon(n.type)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="font-medium text-sm text-zinc-900 dark:text-white">{n.title}</span>
+                                                        <span className="text-[10px] text-zinc-400 whitespace-nowrap">{timeAgo(n.createdAt)}</span>
+                                                    </div>
+                                                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 break-words">{n.message}</p>
+                                                    {n.email && (
+                                                        <span className="text-[10px] text-zinc-400 mt-1 block font-mono">{n.email}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             ))
                         )}

@@ -114,6 +114,7 @@ export function Users() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    toast.success('Скопировано');
   };
 
   const handleManualActivate = async (id: number) => {
@@ -530,7 +531,7 @@ export function Users() {
                         />
                     </td>}
                     {isColVisible('email') && <td className={`${cellPadding} font-medium text-zinc-900 dark:text-white`}>
-                        <InlineEdit value={sub.email} onSave={(v) => handleInlineUpdate(sub.id, 'email', v)} />
+                        <InlineEdit value={sub.email} onSave={(v) => handleInlineUpdate(sub.id, 'email', v)} onCopy={(v) => copyToClipboard(v)} />
                     </td>}
                     {isColVisible('type') && <td className={cellPadding}>
                         <span className={`px-2 py-1 rounded text-xs ${
@@ -679,6 +680,39 @@ export function Users() {
         onClose={() => setViewingHistoryEmail(null)}
         email={viewingHistoryEmail || ''}
       />
+
+      {/* Floating Bulk Actions Toolbar */}
+      {selectedUsers.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-[slideUp_200ms_ease-out]">
+              <div className="flex items-center gap-3 px-5 py-3 bg-zinc-900 dark:bg-zinc-800 text-white rounded-xl shadow-2xl border border-zinc-700 dark:border-zinc-600">
+                  <span className="text-sm font-medium tabular-nums">
+                      Выбрано: <span className="text-blue-400">{selectedUsers.length}</span>
+                  </span>
+                  <div className="w-px h-5 bg-zinc-700" />
+                  <button
+                      onClick={handleBulkDelete}
+                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg transition-colors"
+                  >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      Удалить
+                  </button>
+                  <button
+                      onClick={handleExportCSV}
+                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors"
+                  >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      CSV
+                  </button>
+                  <div className="w-px h-5 bg-zinc-700" />
+                  <button
+                      onClick={() => setSelectedUsers([])}
+                      className="text-sm px-3 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors"
+                  >
+                      Снять выбор
+                  </button>
+              </div>
+          </div>
+      )}
     </Layout>
   );
 }

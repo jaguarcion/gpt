@@ -4,12 +4,13 @@ import { Check, X } from 'lucide-react';
 interface InlineEditProps {
     value: string;
     onSave: (value: string) => Promise<void> | void;
+    onCopy?: (value: string) => void;
     className?: string;
     placeholder?: string;
     disabled?: boolean;
 }
 
-export function InlineEdit({ value, onSave, className = '', placeholder = '-', disabled }: InlineEditProps) {
+export function InlineEdit({ value, onSave, onCopy, className = '', placeholder = '-', disabled }: InlineEditProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(value);
     const [saving, setSaving] = useState(false);
@@ -62,8 +63,9 @@ export function InlineEdit({ value, onSave, className = '', placeholder = '-', d
         return (
             <span
                 className={`cursor-pointer border-b border-dashed border-transparent hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors ${className}`}
+                onClick={() => onCopy && value && onCopy(value)}
                 onDoubleClick={() => setEditing(true)}
-                title="Дважды кликните для редактирования"
+                title={onCopy ? 'Клик — копировать, двойной клик — редактировать' : 'Дважды кликните для редактирования'}
             >
                 {value || <span className="text-zinc-400 dark:text-zinc-600">{placeholder}</span>}
             </span>
