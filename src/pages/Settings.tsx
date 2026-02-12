@@ -1,25 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Layout } from '../components/Layout';
 import { useToast } from '../components/Toast';
-import { setAuthToken } from '../services/api';
+import { setAuthToken, getSettings, saveSettings } from '../services/api';
 import { Save, RefreshCw, Shield, AlertTriangle, Clock, Globe } from 'lucide-react';
-import axios from 'axios';
-
-// Move to api.ts properly later
-const getSettings = async () => {
-    const token = localStorage.getItem('adminToken');
-    const response = await axios.get('/api/settings', {
-        headers: { Authorization: token }
-    });
-    return response.data;
-};
-
-const saveSettings = async (settings: any) => {
-    const token = localStorage.getItem('adminToken');
-    await axios.post('/api/settings', settings, {
-        headers: { Authorization: token }
-    });
-};
 
 export function Settings() {
     const [settings, setSettings] = useState({

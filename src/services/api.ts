@@ -121,85 +121,96 @@ export const addKey = async (codes: string | string[]) => {
 
 export const getSubscriptions = async (page = 1, limit = 20, search = '', filters = {}) => {
   const response = await adminApi.get('/subscriptions', {
-      params: { page, limit, search, ...filters }
+    params: { page, limit, search, ...filters }
   });
   return response.data;
 };
 
 export const getDailyStats = async () => {
-    const response = await adminApi.get('/stats/daily');
-    return response.data;
+  const response = await adminApi.get('/stats/daily');
+  return response.data;
 };
 
 // Backups API
 export const getBackups = async () => {
-    const response = await adminApi.get('/backups');
-    return response.data;
+  const response = await adminApi.get('/backups');
+  return response.data;
 };
 
 export const createBackup = async () => {
-    const response = await adminApi.post('/backups');
-    return response.data;
+  const response = await adminApi.post('/backups');
+  return response.data;
 };
 
 export const deleteBackup = async (filename: string) => {
-    const response = await adminApi.delete(`/backups/${filename}`);
-    return response.data;
+  const response = await adminApi.delete(`/backups/${filename}`);
+  return response.data;
 };
 
 export const downloadBackupUrl = (filename: string) => {
-    return `/api/backups/${filename}`;
+  return `/api/backups/${filename}`;
 };
 
 export const getInventoryStats = async () => {
-    const response = await adminApi.get('/inventory/stats');
-    return response.data;
+  const response = await adminApi.get('/inventory/stats');
+  return response.data;
 };
 
 // Notifications API
 export const getNotifications = async () => {
-    const response = await adminApi.get('/notifications');
-    return response.data;
+  const response = await adminApi.get('/notifications');
+  return response.data;
 };
 
 // Health API
 export const getHealth = async () => {
-    const response = await adminApi.get('/health');
-    return response.data;
+  const response = await adminApi.get('/health');
+  return response.data;
 };
 
 // Rate Limit Stats API
 export const getRateLimitStats = async () => {
-    const response = await adminApi.get('/rate-limit/stats');
-    return response.data;
+  const response = await adminApi.get('/rate-limit/stats');
+  return response.data;
 };
 
 // SLA API
 export const getSLAStats = async () => {
-    const response = await adminApi.get('/sla');
-    return response.data;
+  const response = await adminApi.get('/sla');
+  return response.data;
 };
 
 // Calendar API
 export const getCalendar = async () => {
-    const response = await adminApi.get('/calendar');
-    return response.data;
+  const response = await adminApi.get('/calendar');
+  return response.data;
 };
 
 // Today Widget API
 export const getTodayStats = async () => {
-    const response = await adminApi.get('/today');
-    return response.data;
+  const response = await adminApi.get('/today');
+  return response.data;
 };
 
 // Dashboard API
 export const getDashboard = async () => {
-    const response = await adminApi.get('/dashboard');
-    return response.data;
+  const response = await adminApi.get('/dashboard');
+  return response.data;
 };
 
 // Global Search API (Cmd+K)
 export const globalSearch = async (query: string) => {
-    const response = await adminApi.get('/search', { params: { q: query } });
-    return response.data;
+  const response = await adminApi.get('/search', { params: { q: query } });
+  return response.data;
+};
+
+// Settings API
+export const getSettings = async () => {
+  const response = await adminApi.get('/settings');
+  return response.data;
+};
+
+export const saveSettings = async (settings: any) => {
+  const response = await adminApi.post('/settings', settings);
+  return response.data;
 };
