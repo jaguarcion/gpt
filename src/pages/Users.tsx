@@ -683,7 +683,7 @@ export function Users() {
 
       {/* Floating Bulk Actions Toolbar */}
       {selectedUsers.length > 0 && (
-          <div className="fixed bottom-16 left-1/2 -translate-x-1/2 z-40 animate-[slideUp_200ms_ease-out]">
+          <div className="sticky bottom-4 z-40 flex justify-center animate-[slideUp_200ms_ease-out] mt-4">
               <div className="flex items-center gap-3 px-5 py-3 bg-zinc-900 dark:bg-zinc-800 text-white rounded-xl shadow-2xl border border-zinc-700 dark:border-zinc-600">
                   <span className="text-sm font-medium tabular-nums">
                       Выбрано: <span className="text-blue-400">{selectedUsers.length}</span>
