@@ -1,32 +1,20 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import React from 'react';
+import { motion } from 'framer-motion';
 
 interface PageTransitionProps {
     children: React.ReactNode;
 }
 
 export function PageTransition({ children }: PageTransitionProps) {
-    const location = useLocation();
-    const [visible, setVisible] = useState(true);
-    const prevPath = useRef(location.pathname);
-
-    useEffect(() => {
-        if (prevPath.current !== location.pathname) {
-            prevPath.current = location.pathname;
-            // Fade out briefly, then fade in
-            setVisible(false);
-            const timer = setTimeout(() => setVisible(true), 50);
-            return () => clearTimeout(timer);
-        }
-    }, [location.pathname]);
-
     return (
-        <div
-            className={`transition-all duration-200 ease-out ${
-                visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
-            }`}
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="w-full h-full"
         >
             {children}
-        </div>
+        </motion.div>
     );
 }

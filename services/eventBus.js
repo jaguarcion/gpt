@@ -15,6 +15,9 @@ export const EVENTS = {
     SUBSCRIPTION_UPDATED: 'subscription_updated',
     SUBSCRIPTION_DELETED: 'subscription_deleted',
     STATS_UPDATE: 'stats_update',
+    BATCH_START: 'batch_start',
+    BATCH_PROGRESS: 'batch_progress',
+    BATCH_COMPLETE: 'batch_complete',
 };
 
 export function emitEvent(type, data) {

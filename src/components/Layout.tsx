@@ -57,11 +57,10 @@ function NavDropdown({ group, location }: { group: NavGroup; location: ReturnTyp
         <div className="relative" ref={ref}>
             <button
                 onClick={() => setOpen(!open)}
-                className={`relative flex items-center gap-1 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive || open
-                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
-                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
-                }`}
+                className={`relative flex items-center gap-1 px-3 py-2 rounded-md text-sm transition-colors ${isActive || open
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
+                    }`}
             >
                 {group.icon}
                 {group.label}
@@ -77,11 +76,10 @@ function NavDropdown({ group, location }: { group: NavGroup; location: ReturnTyp
                         <Link
                             key={item.path}
                             to={item.path}
-                            className={`relative flex items-center px-4 py-2.5 text-sm transition-colors ${
-                                location.pathname === item.path
-                                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
-                                    : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-white'
-                            }`}
+                            className={`relative flex items-center px-4 py-2.5 text-sm transition-colors ${location.pathname === item.path
+                                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
+                                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-white'
+                                }`}
                         >
                             {item.label}
                             {item.badge && (
@@ -109,6 +107,7 @@ export function Layout({ children }: LayoutProps) {
         { path: '/admin', label: 'Дашборд' },
         { path: '/admin/keys', label: 'Ключи' },
         { path: '/admin/users', label: 'Пользователи' },
+        { path: '/admin/queue', label: 'Очередь', badge: true },
         {
             label: 'Аналитика',
             icon: <BarChart3 className="w-4 h-4" />,
@@ -127,6 +126,8 @@ export function Layout({ children }: LayoutProps) {
                 { path: '/admin/health', label: 'Состояние системы' },
                 { path: '/admin/backups', label: 'Бэкапы' },
                 { path: '/admin/rate-limit', label: 'Rate Limit' },
+                { path: '/admin/settings', label: 'Настройки' },
+                { path: '/admin/db', label: 'База данных' },
                 { path: '/admin/changelog', label: 'Changelog', badge: getChangelogBadge() },
             ]
         },
@@ -149,7 +150,7 @@ export function Layout({ children }: LayoutProps) {
                         <Link to="/admin" className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
                             GPT Admin
                         </Link>
-                        
+
                         {/* Desktop Nav */}
                         <nav className="hidden md:flex items-center gap-0.5">
                             {navEntries.map((entry, idx) =>
@@ -159,11 +160,10 @@ export function Layout({ children }: LayoutProps) {
                                     <Link
                                         key={entry.path}
                                         to={entry.path}
-                                        className={`relative px-3 py-2 rounded-md text-sm transition-colors ${
-                                            location.pathname === entry.path
-                                                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
-                                                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
-                                        }`}
+                                        className={`relative px-3 py-2 rounded-md text-sm transition-colors ${location.pathname === entry.path
+                                            ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
+                                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
+                                            }`}
                                     >
                                         {entry.label}
                                     </Link>
@@ -184,7 +184,7 @@ export function Layout({ children }: LayoutProps) {
                         <TodayWidget />
                         <NotificationCenter />
                         <ModeToggle />
-                        <button 
+                        <button
                             onClick={() => { useAuthStore.getState().logout(); navigate('/login'); }}
                             className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                             title="Выйти"
@@ -194,7 +194,7 @@ export function Layout({ children }: LayoutProps) {
                         </button>
                     </div>
                 </div>
-                
+
             </header>
 
             {/* Main Content */}
@@ -236,6 +236,7 @@ function MobileTabBar({ location }: { location: ReturnType<typeof useLocation> }
         { path: '/admin/calendar', label: 'Календарь', icon: <BarChart3 className="w-4 h-4" /> },
         { path: '/admin/health', label: 'Здоровье', icon: <Settings className="w-4 h-4" /> },
         { path: '/admin/backups', label: 'Бэкапы', icon: <Settings className="w-4 h-4" /> },
+        { path: '/admin/settings', label: 'Настройки', icon: <Settings className="w-4 h-4" /> },
     ];
 
     const isMoreActive = moreTabs.some(t => location.pathname === t.path);
@@ -259,11 +260,10 @@ function MobileTabBar({ location }: { location: ReturnType<typeof useLocation> }
                         <Link
                             key={tab.path}
                             to={tab.path}
-                            className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
-                                active
-                                    ? 'text-blue-600 dark:text-blue-400'
-                                    : 'text-zinc-400 dark:text-zinc-500'
-                            }`}
+                            className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${active
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : 'text-zinc-400 dark:text-zinc-500'
+                                }`}
                         >
                             {tab.icon}
                             <span className="text-[10px] font-medium">{tab.label}</span>
@@ -275,11 +275,10 @@ function MobileTabBar({ location }: { location: ReturnType<typeof useLocation> }
                 <div className="relative flex-1 h-full" ref={moreRef}>
                     <button
                         onClick={() => setShowMore(!showMore)}
-                        className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors ${
-                            isMoreActive || showMore
-                                ? 'text-blue-600 dark:text-blue-400'
-                                : 'text-zinc-400 dark:text-zinc-500'
-                        }`}
+                        className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors ${isMoreActive || showMore
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-zinc-400 dark:text-zinc-500'
+                            }`}
                     >
                         <MoreHorizontal className="w-5 h-5" />
                         <span className="text-[10px] font-medium">Ещё</span>
@@ -293,11 +292,10 @@ function MobileTabBar({ location }: { location: ReturnType<typeof useLocation> }
                                     <Link
                                         key={tab.path}
                                         to={tab.path}
-                                        className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                                            active
-                                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium'
-                                                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
-                                        }`}
+                                        className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${active
+                                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium'
+                                            : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                                            }`}
                                     >
                                         {tab.icon}
                                         {tab.label}

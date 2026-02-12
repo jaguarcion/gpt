@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboard, setAuthToken } from '../services/api';
 import { Layout } from '../components/Layout';
+import { AnimatePresence, motion } from 'framer-motion';
 import { SkeletonDashboard } from '../components/Skeleton';
 import { useTheme } from '../components/ThemeProvider';
 import { useSSE } from '../hooks/useSSE';
@@ -349,15 +350,36 @@ export function Dashboard() {
         ),
     };
 
+    const container = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.1
+            }
+        }
+    };
+
+    const item = {
+        hidden: { opacity: 0, y: 20 },
+        show: { opacity: 1, y: 0 }
+    };
+
     return (
         <Layout>
-            <div className="max-w-6xl mx-auto space-y-6">
+            <motion.div
+                className="max-w-6xl mx-auto space-y-6"
+                variants={container}
+                initial="hidden"
+                animate="show"
+            >
                 {/* Header */}
-                <div className="flex justify-between items-center">
+                <motion.div className="flex justify-between items-center" variants={item}>
                     <div>
                         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Дашборд</h1>
                         <p className="text-sm text-zinc-500 mt-1">Обзор системы на {new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                     </div>
+                    {/* ... (rest of header content) */}
                     <div className="flex items-center gap-2">
                         {sseConnected ? (
                             <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full">
@@ -401,9 +423,8 @@ export function Dashboard() {
                                                 setDragOverIdx(null);
                                             }}
                                             onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
-                                            className={`flex items-center gap-2 px-4 py-2.5 cursor-grab active:cursor-grabbing transition-colors ${
-                                                dragOverIdx === idx ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
-                                            }`}
+                                            className={`flex items-center gap-2 px-4 py-2.5 cursor-grab active:cursor-grabbing transition-colors ${dragOverIdx === idx ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                                                }`}
                                         >
                                             <GripVertical className="w-3.5 h-3.5 text-zinc-300 dark:text-zinc-600 shrink-0" />
                                             <span className="text-sm text-zinc-700 dark:text-zinc-300 flex-1">{w.label}</span>
@@ -419,15 +440,15 @@ export function Dashboard() {
                             )}
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* Render widgets in saved order */}
                 {widgets.filter(w => w.visible).map(w => (
-                    <div key={w.id}>
+                    <motion.div key={w.id} variants={item}>
                         {widgetContent[w.id]}
-                    </div>
+                    </motion.div>
                 ))}
-            </div>
+            </motion.div>
         </Layout>
     );
 }

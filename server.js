@@ -1331,7 +1331,185 @@ app.get('/api/rate-limit/stats', authenticateToken, async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+// --- Settings API ---
+const SETTINGS_FILE = './settings.json';
+
+app.get('/api/settings', authenticateToken, (req, res) => {
+    try {
+        if (fs.existsSync(SETTINGS_FILE)) {
+            const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+            res.json(JSON.parse(data));
+        } else {
+            res.json({}); // Return empty if not exists
+        }
+    } catch (e) {
+        console.error('Settings read error:', e);
+        res.status(500).json({ error: 'Failed to load settings' });
+    }
+});
+
+app.post('/api/settings', authenticateToken, (req, res) => {
+    try {
+        const { adminPassword, ...settings } = req.body;
+
+        // Save settings to file
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+
+        // If password change requested (and not empty)
+        if (adminPassword && adminPassword.trim() !== '') {
+            // In a real app, we'd hash it and store in DB or updating .env
+            // Here we just log it for now as "not implemented full password change logic"
+            console.log('Admin password change requested (not fully implemented in this demo)');
+        }
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Settings save error:', e);
+        res.status(500).json({ error: 'Failed to save settings' });
+    }
+});
+
+
+// --- Queue / Scheduler API ---
+
+// Queue Status State
+let queueStatus = {
+    isRunning: false,
+    nextRun: getNextRunTime(),
+    lastRun: null,
+    processed: 0,
+    total: 0,
+    currentEmail: null,
+    errors: []
+};
+
+function getNextRunTime() {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(10, 0, 0, 0);
+    if (next <= now) {
+        next.setDate(next.getDate() + 1);
+    }
+    return next.toISOString();
+}
+
+// Listen to internal events to update queue status
+eventBus.on('sse', (payload) => {
+    const { type, data, timestamp } = payload;
+
+    if (type === EVENTS.BATCH_START) {
+        queueStatus.isRunning = true;
+        queueStatus.total = data.total;
+        queueStatus.processed = 0;
+        queueStatus.errors = [];
+        queueStatus.lastRun = new Date().toISOString();
+    } else if (type === EVENTS.BATCH_PROGRESS) {
+        queueStatus.processed = data.current;
+        queueStatus.currentEmail = data.email;
+    } else if (type === EVENTS.BATCH_COMPLETE) {
+        queueStatus.isRunning = false;
+        queueStatus.currentEmail = null;
+        queueStatus.nextRun = getNextRunTime();
+        // Emit update to clients
+        emitEvent('queue-update', queueStatus);
+    } else if (type === EVENTS.ERROR && queueStatus.isRunning) {
+        queueStatus.errors.push({
+            email: data.email,
+            error: data.message,
+            time: timestamp
+        });
+    }
+
+    // Forward queue updates to SSE clients throttled? 
+    // For now, we rely on the client listening to specific events or we can emit a 'queue-update' event
+    if (queueStatus.isRunning) {
+        emitEvent('queue-update', queueStatus);
+    }
+});
+
+app.get('/api/queue/status', authenticateToken, (req, res) => {
+    res.json(queueStatus);
+});
+
+app.post('/api/queue/run', authenticateToken, async (req, res) => {
+    if (queueStatus.isRunning) {
+        return res.status(400).json({ error: 'Queue is already running' });
+    }
+
+    // Trigger async (fire and forget)
+    SubscriptionService.processScheduledActivations().catch(err => {
+        console.error('Manual queue run failed:', err);
+    });
+
+    res.json({ success: true, message: 'Queue started' });
+});
+
+// Initialize Cron
+cron.schedule('0 10 * * *', async () => {
+    console.log('[Cron] Running scheduled activations...');
+    await SubscriptionService.processScheduledActivations();
+});
+
+// --- Database Explorer API ---
+
+app.get('/api/db/tables', authenticateToken, async (req, res) => {
+    try {
+        // Get tables for SQLite
+        const tables = await prisma.$queryRaw`
+            SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_prisma_%';
+        `;
+
+        // Get counts for each table
+        const tablesWithCounts = await Promise.all(tables.map(async (t) => {
+            const countResult = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as count FROM ${t.name}`);
+            // SQLite returns BigInt for count usually, verify
+            return {
+                name: t.name,
+                count: Number(countResult[0].count)
+            };
+        }));
+
+        res.json(tablesWithCounts);
+    } catch (e) {
+        console.error('DB Tables Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/db/query', authenticateToken, async (req, res) => {
+    try {
+        const { query } = req.body;
+        if (!query) return res.status(400).json({ error: 'Query is required' });
+
+        // Security check? Admin token is required, so we trust admin.
+        // But maybe block DROP TABLE or DELETE without WHERE? 
+        // For now, full power to admin.
+
+        // Use executeRaw for non-SELECT, queryRaw for SELECT?
+        // Actually queryRawUnsafe works for both in Prisma? 
+        // Docs say: queryRaw is for returning data, executeRaw for run and return count.
+        // But we want to see results for everything if possible.
+        // If it's a SELECT, we get array. If INSERT/UPDATE, we get metadata?
+
+        let result;
+        const lowerQ = query.trim().toLowerCase();
+
+        if (lowerQ.startsWith('select') || lowerQ.startsWith('pragma')) {
+            result = await prisma.$queryRawUnsafe(query);
+            // Serialize BigInt if needed (already handled globally at top of file)
+            res.json(result);
+        } else {
+            result = await prisma.$executeRawUnsafe(query);
+            res.json({ rowsAffected: Number(result) });
+        }
+
+    } catch (e) {
+        console.error('DB Query Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Endpoint: POST http://localhost:${PORT}/api/activate-key`);
 });

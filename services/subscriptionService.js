@@ -541,6 +541,12 @@ export class SubscriptionService {
     static async updateSubscription(id, data) {
         const { email, type, endDate, status, note } = data;
 
+        const existing = await prisma.subscription.findUnique({
+            where: { id: parseInt(id) }
+        });
+
+        if (!existing) throw new Error('Subscription not found');
+
         // Prepare update data
         const updateData = {};
         if (email) updateData.email = email;
@@ -557,10 +563,33 @@ export class SubscriptionService {
             updateData.startDate = newStart;
         }
 
-        return prisma.subscription.update({
+        const updated = await prisma.subscription.update({
             where: { id: parseInt(id) },
             data: updateData
         });
+
+        // Calculate diff
+        const diff = {};
+        if (email && email !== existing.email) diff.email = { from: existing.email, to: email };
+        if (type && type !== existing.type) diff.type = { from: existing.type, to: type };
+        if (status && status !== existing.status) diff.status = { from: existing.status, to: status };
+        if (note !== undefined && note !== existing.note) diff.note = { from: existing.note, to: note };
+        if (endDate) {
+            // Rough check since we only store startDate
+            const oldEnd = new Date(existing.startDate);
+            const oldMonths = existing.type === '3m' ? 3 : (existing.type === '2m' ? 2 : 1);
+            oldEnd.setMonth(oldEnd.getMonth() + oldMonths);
+            const newEnd = new Date(endDate);
+            if (oldEnd.toISOString().split('T')[0] !== newEnd.toISOString().split('T')[0]) {
+                diff.endDate = { from: oldEnd.toISOString().split('T')[0], to: newEnd.toISOString().split('T')[0] };
+            }
+        }
+
+        if (Object.keys(diff).length > 0) {
+            await LogService.log('USER_UPDATE', `Updated user #${id}`, existing.email, { diff, source: 'admin' });
+        }
+
+        return updated;
     }
 
     static async processScheduledActivations() {
@@ -603,13 +632,24 @@ export class SubscriptionService {
         });
 
         console.log(`[Scheduler] Found ${dueSubscriptions.length} subscriptions due for activation.`);
+        emitEvent(EVENTS.BATCH_START, { total: dueSubscriptions.length });
+
+        let processedCount = 0;
 
         for (const sub of dueSubscriptions) {
+            processedCount++;
+            emitEvent(EVENTS.BATCH_PROGRESS, {
+                current: processedCount,
+                total: dueSubscriptions.length,
+                email: sub.email
+            });
+
             try {
                 // Get Session
                 const session = await SessionService.getSessionByEmail(sub.email);
                 if (!session) {
                     console.error(`[Scheduler] Session not found for ${sub.email}`);
+                    emitEvent(EVENTS.ERROR, { email: sub.email, message: 'Session not found' });
                     continue;
                 }
 
@@ -620,6 +660,7 @@ export class SubscriptionService {
                         where: { id: sub.id },
                         data: { status: 'completed' } // Or 'expired'
                     });
+                    emitEvent(EVENTS.ERROR, { email: sub.email, message: 'Session expired' });
                     continue;
                 }
 
@@ -628,6 +669,7 @@ export class SubscriptionService {
                 if (!key) {
                     console.error(`[Scheduler] No keys available for ${sub.email}`);
                     notifyAdmins(`🚨 *КРИТИЧЕСКАЯ ОШИБКА*\nЗакончились ключи для продления!\nEmail: \`${sub.email}\`\nСрочно добавьте ключи!`);
+                    emitEvent(EVENTS.ERROR, { email: sub.email, message: 'No keys available' });
                     continue; // Try next time
                 }
 
@@ -659,11 +701,16 @@ export class SubscriptionService {
                     notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
                     await LogService.log('ERROR', `Auto-renewal failed for #${sub.id}: ${result.message}`, sub.email, { source: 'scheduler' });
                     emitEvent(EVENTS.ERROR, { subscriptionId: sub.id, email: sub.email, message: result.message });
+                    // Maybe we should not mark it as processed if failed? 
+                    // But for the sake of queue progress, it IS processed (attempted).
                 }
 
             } catch (e) {
                 console.error(`[Scheduler] Error processing sub ${sub.id}:`, e);
+                emitEvent(EVENTS.ERROR, { email: sub.email, message: e.message });
             }
         }
+
+        emitEvent(EVENTS.BATCH_COMPLETE, { total: dueSubscriptions.length });
     }
 }
