@@ -11,6 +11,8 @@ import { useScrollRestore } from '../hooks/useScrollRestore';
 import { useSortable } from '../hooks/useSortable';
 import { SortableHeader } from '../components/SortableHeader';
 import { RelativeTime } from '../components/RelativeTime';
+import { Checkbox } from '../components/Checkbox';
+import { useConfirm } from '../components/ConfirmDialog';
 
 export function AdminPanel() {
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,7 @@ export function AdminPanel() {
 
   // Column customization
   const keyColumns: Column[] = [
+      { key: 'checkbox', label: '☐', required: true },
       { key: 'id', label: 'ID' },
       { key: 'code', label: 'Code', required: true },
       { key: 'status', label: 'Status' },
@@ -38,6 +41,8 @@ export function AdminPanel() {
   const { visible: visibleCols, toggle: toggleCol, isVisible: isColVisible, reset: resetCols } = useColumnVisibility('keys', keyColumns);
   const { density, toggle: toggleDensity, cellPadding, headerPadding, fontSize } = useTableDensity();
   const toast = useToast();
+  const confirm = useConfirm();
+  const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
 
   const loadData = async (currentPage = page, currentStatus = statusFilter) => {
     try {
@@ -158,6 +163,39 @@ export function AdminPanel() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    toast.success('Скопировано');
+  };
+
+  const toggleSelectAllKeys = () => {
+      if (selectedKeys.length === keys.length) {
+          setSelectedKeys([]);
+      } else {
+          setSelectedKeys(keys.map(k => k.id));
+      }
+  };
+
+  const toggleSelectKey = (id: number) => {
+      setSelectedKeys(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleBulkDeleteKeys = async () => {
+      const ok = await confirm({
+          title: 'Массовое удаление',
+          message: `Удалить выбранные ключи (${selectedKeys.length})? Это действие нельзя отменить.`,
+          confirmText: 'Удалить',
+          variant: 'danger',
+      });
+      if (!ok) return;
+      try {
+          for (const id of selectedKeys) {
+              await deleteKey(id);
+          }
+          setSelectedKeys([]);
+          loadData();
+          toast.success(`Удалено ключей: ${selectedKeys.length}`);
+      } catch (e: any) {
+          toast.error('Ошибка массового удаления: ' + (e.message));
+      }
   };
 
   const { sorted: sortedKeys, sortKey, sortDirection, toggleSort } = useSortable(keys);
@@ -249,6 +287,13 @@ export function AdminPanel() {
             <table className={`w-full text-left ${fontSize}`}>
                 <thead className={`bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs sticky top-0 z-10`}>
                 <tr>
+                    {isColVisible('checkbox') && <th className={`${headerPadding} w-4`}>
+                        <Checkbox
+                            checked={selectedKeys.length > 0 && selectedKeys.length === keys.length}
+                            indeterminate={selectedKeys.length > 0 && selectedKeys.length < keys.length}
+                            onChange={toggleSelectAllKeys}
+                        />
+                    </th>}
                     {isColVisible('id') && <SortableHeader label="ID" sortKey="id" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
                     {isColVisible('code') && <SortableHeader label="Code" sortKey="code" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
                     {isColVisible('status') && <SortableHeader label="Status" sortKey="status" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
@@ -260,6 +305,12 @@ export function AdminPanel() {
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {sortedKeys.map((key) => (
                     <tr key={key.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    {isColVisible('checkbox') && <td className={cellPadding}>
+                        <Checkbox
+                            checked={selectedKeys.includes(key.id)}
+                            onChange={() => toggleSelectKey(key.id)}
+                        />
+                    </td>}
                     {isColVisible('id') && <td className={`${cellPadding} font-mono text-zinc-500`}>{key.id}</td>}
                     {isColVisible('code') && <td className={`${cellPadding} font-mono text-zinc-700 dark:text-zinc-300`}>
                         <span 
@@ -322,6 +373,39 @@ export function AdminPanel() {
             )}
         </div>
       </div>
+
+      {/* Floating Bulk Actions Toolbar */}
+      {selectedKeys.length > 0 && (
+          <div className="sticky bottom-4 z-40 flex justify-center animate-[slideUp_200ms_ease-out] mt-4">
+              <div className="flex items-center gap-3 px-5 py-3 bg-zinc-900 dark:bg-zinc-800 text-white rounded-xl shadow-2xl border border-zinc-700 dark:border-zinc-600">
+                  <span className="text-sm font-medium tabular-nums">
+                      Выбрано: <span className="text-blue-400">{selectedKeys.length}</span>
+                  </span>
+                  <div className="w-px h-5 bg-zinc-700" />
+                  <button
+                      onClick={handleBulkDeleteKeys}
+                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg transition-colors"
+                  >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      Удалить
+                  </button>
+                  <button
+                      onClick={handleExportCSV}
+                      className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors"
+                  >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      CSV
+                  </button>
+                  <div className="w-px h-5 bg-zinc-700" />
+                  <button
+                      onClick={() => setSelectedKeys([])}
+                      className="text-sm px-3 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors"
+                  >
+                      Снять выбор
+                  </button>
+              </div>
+          </div>
+      )}
     </Layout>
   );
 }

@@ -16,6 +16,7 @@ import { useSortable } from '../hooks/useSortable';
 import { SortableHeader } from '../components/SortableHeader';
 import { InlineEdit } from '../components/InlineEdit';
 import { RelativeTime } from '../components/RelativeTime';
+import { Checkbox } from '../components/Checkbox';
 
 interface Key {
   id: number;
@@ -493,11 +494,10 @@ export function Users() {
                 <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 uppercase text-xs sticky top-0 z-10">
                 <tr>
                     {isColVisible('checkbox') && <th className={`${headerPadding} w-4`}>
-                        <input 
-                            type="checkbox" 
+                        <Checkbox
                             checked={selectedUsers.length > 0 && selectedUsers.length === subscriptions.length}
+                            indeterminate={selectedUsers.length > 0 && selectedUsers.length < subscriptions.length}
                             onChange={toggleSelectAll}
-                            className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </th>}
                     {isColVisible('email') && <SortableHeader label="Email" sortKey="email" currentSortKey={sortKey} currentDirection={sortDirection} onSort={toggleSort} className={headerPadding} />}
@@ -523,11 +523,9 @@ export function Users() {
                     return (
                     <tr key={sub.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
                     {isColVisible('checkbox') && <td className={cellPadding}>
-                        <input 
-                            type="checkbox" 
+                        <Checkbox
                             checked={selectedUsers.includes(sub.id)}
                             onChange={() => toggleSelectUser(sub.id)}
-                            className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-blue-600 focus:ring-0 focus:ring-offset-0"
                         />
                     </td>}
                     {isColVisible('email') && <td className={`${cellPadding} font-medium text-zinc-900 dark:text-white`}>
