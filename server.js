@@ -602,7 +602,8 @@ app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
             sessionJson
         );
 
-        res.json(result);
+        // Sanitize BigInt fields before JSON serialization
+        res.json(JSON.parse(JSON.stringify(result, (_, v) => typeof v === 'bigint' ? v.toString() : v)));
 
     } catch (e) {
         console.error('Subscription Error:', e.message);

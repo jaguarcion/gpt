@@ -435,7 +435,20 @@ export class SubscriptionService {
                 throw new Error(`Ошибка активации: ${activationResult.message}`);
             }
 
-            return { subscription, activationResult };
+            return {
+                subscription: {
+                    id: subscription.id,
+                    email: subscription.email,
+                    type: subscription.type,
+                    status: subscription.status,
+                    activationsCount: subscription.activationsCount,
+                    startDate: subscription.startDate,
+                },
+                activationResult: {
+                    success: activationResult.success,
+                    message: activationResult.message || 'OK',
+                },
+            };
         } finally {
             processingLocks.delete(email);
         }
