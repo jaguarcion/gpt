@@ -121,7 +121,7 @@ export function Layout({ children }: LayoutProps) {
             label: 'Система',
             icon: <Settings className="w-4 h-4" />,
             items: [
-                { path: '/admin/queue', label: 'Очередь', badge: true },
+                { path: '/admin/queue', label: 'Очередь' },
                 { path: '/admin/logs', label: 'Логи' },
                 { path: '/admin/health', label: 'Состояние системы' },
                 { path: '/admin/backups', label: 'Бэкапы' },
