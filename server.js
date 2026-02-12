@@ -413,6 +413,16 @@ app.get('/api/logs', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/logs/stats', authenticateToken, async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 7;
+        const stats = await LogService.getGroupedLogs(days);
+        res.json(stats);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/keys', authenticateToken, async (req, res) => {
     try {
         const { code, codes } = req.body;
