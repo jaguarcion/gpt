@@ -25,18 +25,18 @@ const bot = new Telegraf(BOT_TOKEN);
 // Middleware to check authorization
 bot.use((ctx, next) => {
     if (!ctx.from) return next();
-    
+
     const userId = ctx.from.id;
-    
+
     // If ALLOWED_USERS is empty, allow everyone (or restrict if you prefer secure-by-default)
     // Here we assume if the variable is set, we restrict. If not set, we might warn or allow all.
     // Let's implement Strict Mode: if variable exists but user not in it -> deny.
-    
+
     if (ALLOWED_USERS.length > 0 && !ALLOWED_USERS.includes(userId)) {
         console.log(`Unauthorized access attempt from user: ${userId} (${ctx.from.username})`);
         return ctx.reply('⛔ У вас нет доступа к этому боту.');
     }
-    
+
     return next();
 });
 
@@ -93,7 +93,7 @@ bot.on('text', async (ctx) => {
         if (cleanText.startsWith('`') && cleanText.endsWith('`')) {
             cleanText = cleanText.slice(1, -1);
         }
-        
+
         // Validate JSON and extract email
         let sessionData;
         try {
@@ -104,7 +104,7 @@ bot.on('text', async (ctx) => {
 
         // Try to find email in session user object or top level
         let email = sessionData.email || sessionData.user?.email;
-        
+
         if (!email) {
             // Ask for email manually if not found
             currentState.sessionJson = cleanText;
@@ -130,7 +130,7 @@ async function performActivation(ctx, email, sessionJson, type) {
     const initialMsg = await ctx.reply(`Данные получены (${type}, ${email}).\n\nНачинаю активацию... ⏳`);
 
     let isFinished = false;
-    
+
     // Simulated progress steps
     const progressSteps = [
         { delay: 2000, text: 'Проверяю доступность ключа... 🔎' },
@@ -148,10 +148,10 @@ async function performActivation(ctx, email, sessionJson, type) {
                 // Check if isFinished became true during await
                 if (!isFinished) {
                     await ctx.telegram.editMessageText(
-                        initialMsg.chat.id, 
-                        initialMsg.message_id, 
-                        undefined, 
-                        `Данные получены (${type}, ${email}).\n${step.text}`, 
+                        initialMsg.chat.id,
+                        initialMsg.message_id,
+                        undefined,
+                        `Данные получены (${type}, ${email}).\n${step.text}`,
                         { parse_mode: 'Markdown' }
                     );
                 }
@@ -180,7 +180,7 @@ async function performActivation(ctx, email, sessionJson, type) {
         if (result.activationResult && result.activationResult.success) {
             const taskId = result.activationResult.data?.task_id || 'N/A';
             let msg = `Данные получены (${type}, ${email}).\n\n✅ *Успешно активировано!*\n\nВыберите срок новой активации.`;
-            
+
             if (type === '3m') {
                 msg += `\n\n📅 Это первая активация из 3-х. Следующая активация запланирована автоматически через 30 дней.`;
             } else if (type === '2m') {
@@ -192,12 +192,12 @@ async function performActivation(ctx, email, sessionJson, type) {
                 [Markup.button.callback('2 месяца', 'plan_2m')],
                 [Markup.button.callback('3 месяца', 'plan_3m')]
             ]);
-            
+
             await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { parse_mode: 'Markdown', ...keyboard });
         } else {
-             const errorText = result.activationResult?.message || 'Неизвестная ошибка';
-             let failMsg = `Данные получены (${type}, ${email}).\n\n❌ *Ошибка активации*: ${errorText}`;
-             failMsg += `\n\nНажмите /start для новой активации.`;
+            const errorText = result.activationResult?.message || 'Неизвестная ошибка';
+            let failMsg = `Данные получены (${type}, ${email}).\n\n❌ *Ошибка активации*: ${errorText}`;
+            failMsg += `\n\nНажмите /start для новой активации.`;
             await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
         }
 
@@ -209,6 +209,9 @@ async function performActivation(ctx, email, sessionJson, type) {
             errorMsg += `\n\nДетали: ${error.response.data.message}`;
         } else if (error.response?.data?.error) {
             errorMsg += `\n\nДетали: ${error.response.data.error}`;
+        } else if (typeof error.response?.data === 'string') {
+            // Handle HTML or raw string errors
+            errorMsg += `\n\nОтвет сервера: ${error.response.data.substring(0, 200)}...`;
         }
         let failMsg = `Данные получены (${type}, ${email}).\n\n❌ *Ошибка*: ${errorMsg}`;
         failMsg += `\n\nНажмите /start для новой активации.`;

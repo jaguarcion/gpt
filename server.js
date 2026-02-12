@@ -740,6 +740,7 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
             activateRes = await axios.post(`${BASE_URL}/stocks/public/outstock`,
                 outstockBody,
                 {
+                    timeout: 45000, // 45 seconds timeout
                     headers: {
                         ...EXTERNAL_API_HEADERS,
                         'Referer': 'https://receipt.nitro.xin/',
@@ -762,9 +763,16 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
         }
 
         const taskId = activateRes.data; // API returns UUID string directly
+
+        // Debug logging
+        console.log(`[${cdk}] Outstock response status: ${activateRes.status}`);
+        if (typeof taskId !== 'string') {
+            console.error(`[${cdk}] INVALID TASK ID FORMAT. Received type: ${typeof taskId}. Value:`, JSON.stringify(taskId).slice(0, 200));
+        }
+
         if (!taskId || typeof taskId !== 'string') {
-            console.error(`[${cdk}] Failed to get taskId. Response:`, activateRes.data);
-            return res.status(500).json({ success: false, message: 'Failed to get activation Task ID' });
+            console.error(`[${cdk}] Failed to get taskId. Full Response Data:`, JSON.stringify(activateRes.data).slice(0, 500));
+            return res.status(500).json({ success: false, message: 'Failed to get activation Task ID from upstream API' });
         }
 
         console.log(`[${cdk}] Task ID received: ${taskId}. Starting poll...`);
