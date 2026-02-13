@@ -1527,8 +1527,15 @@ function getNextRunTime() {
 }
 
 // Listen to internal events to update queue status
+// IMPORTANT: Do NOT call emitEvent() inside this listener — it would cause infinite recursion
+// because emitEvent emits 'sse', which triggers this listener again.
 eventBus.on('sse', (payload) => {
     const { type, data, timestamp } = payload;
+
+    // Skip queue-update events to avoid processing our own broadcasts
+    if (type === 'queue-update') return;
+
+    let updated = false;
 
     if (type === EVENTS.BATCH_START) {
         queueStatus.isRunning = true;
@@ -1536,27 +1543,31 @@ eventBus.on('sse', (payload) => {
         queueStatus.processed = 0;
         queueStatus.errors = [];
         queueStatus.lastRun = new Date().toISOString();
+        updated = true;
     } else if (type === EVENTS.BATCH_PROGRESS) {
         queueStatus.processed = data.current;
         queueStatus.currentEmail = data.email;
+        updated = true;
     } else if (type === EVENTS.BATCH_COMPLETE) {
         queueStatus.isRunning = false;
         queueStatus.currentEmail = null;
         queueStatus.nextRun = getNextRunTime();
-        // Emit update to clients
-        emitEvent('queue-update', queueStatus);
+        updated = true;
     } else if (type === EVENTS.ERROR && queueStatus.isRunning) {
         queueStatus.errors.push({
             email: data.email,
             error: data.message,
             time: timestamp
         });
+        updated = true;
     }
 
-    // Forward queue updates to SSE clients throttled? 
-    // For now, we rely on the client listening to specific events or we can emit a 'queue-update' event
-    if (queueStatus.isRunning) {
-        emitEvent('queue-update', queueStatus);
+    // Broadcast queue status directly to SSE clients (without emitEvent to avoid recursion)
+    if (updated) {
+        const sseData = `data: ${JSON.stringify({ type: 'queue-update', data: queueStatus, timestamp: new Date().toISOString() })}\n\n`;
+        for (const client of sseClients) {
+            try { client.write(sseData); } catch { sseClients.delete(client); }
+        }
     }
 });
 
