@@ -731,8 +731,23 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
             return `HTTP ${err.response?.status || '???'}: ${err.message}`;
         };
 
-        // Skip check-key and check-user steps — outstock validates internally.
-        // This saves ~1-2s per activation.
+        // --- PRE-CHECK: Validate CDK before activation ---
+        console.log(`[${cdk}] Checking CDK validity...`);
+        try {
+            const checkRes = await axios.post(`${BASE_URL}/cdks/public/check`,
+                JSON.stringify({ code: cdk }),
+                { headers: EXTERNAL_API_HEADERS, timeout: 15000 }
+            );
+            const checkData = checkRes.data;
+            console.log(`[${cdk}] CDK check: used=${checkData.used}, app=${checkData.app_product_name}`);
+            if (checkData.used) {
+                return res.status(400).json({ success: false, message: `Ключ ${cdk} уже использован` });
+            }
+        } catch (checkErr) {
+            const msg = checkErr.response?.data || checkErr.message;
+            console.error(`[${cdk}] CDK check failed:`, msg);
+            return res.status(400).json({ success: false, message: `Не удалось проверить ключ: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}` });
+        }
 
         // --- REQUEST ACTIVATION (OUTSTOCK) ---
         console.log(`[${cdk}] Requesting activation (outstock)...`);
