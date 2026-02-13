@@ -318,7 +318,17 @@ export class SubscriptionService {
                     const timeDiff = Date.now() - new Date(lastKey.usedAt).getTime();
                     if (timeDiff < TWO_MINUTES_MS) {
                         console.log(`[Sub] Skipping duplicate activation for ${email}(activated ${Math.round(timeDiff / 1000)}s ago)`);
-                        return { subscription: existingSub, activationResult: { success: true, message: 'Already activated' } };
+                        return {
+                            subscription: {
+                                id: existingSub.id,
+                                email: existingSub.email,
+                                type: existingSub.type,
+                                status: existingSub.status,
+                                activationsCount: existingSub.activationsCount,
+                                startDate: existingSub.startDate,
+                            },
+                            activationResult: { success: true, message: 'Already activated' },
+                        };
                     }
                 }
             }
