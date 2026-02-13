@@ -340,72 +340,75 @@ export class SubscriptionService {
                 throw new Error(`Нет доступных ключей`);
             }
 
-            // 2. Create/Update subscription + session in a transaction
-            let subscription = await prisma.$transaction(async (tx) => {
-                let sub;
-                if (existingSub) {
-                    sub = await tx.subscription.update({
-                        where: { id: existingSub.id },
-                        data: {
-                            type,
-                            status: 'active',
-                            activationsCount: 0,
-                            lifetimeActivations: existingSub.lifetimeActivations,
-                            startDate: new Date(),
-                            nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + THIRTY_DAYS_MS) : null
-                        }
-                    });
-                } else {
-                    sub = await tx.subscription.create({
-                        data: {
-                            email,
-                            type,
-                            status: 'active',
-                            activationsCount: 0,
-                            nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + THIRTY_DAYS_MS) : null
-                        }
-                    });
-                }
-
-                // Save Session (upsert) inside transaction
-                let expiresAt = new Date(Date.now() + NINETY_DAYS_MS);
-                const parsedSession = typeof sessionJson === 'string' ? (() => { try { return JSON.parse(sessionJson); } catch { return null; } })() : sessionJson;
-                if (parsedSession && parsedSession.expires) {
-                    expiresAt = new Date(parsedSession.expires);
-                }
-
-                const existingSession = await tx.session.findFirst({
-                    where: { email },
-                    orderBy: { createdAt: 'desc' }
+            // 2. Create/Update subscription
+            console.log(`[Sub] Step 2: Creating/updating subscription for ${email}...`);
+            let subscription;
+            if (existingSub) {
+                subscription = await prisma.subscription.update({
+                    where: { id: existingSub.id },
+                    data: {
+                        type,
+                        status: 'active',
+                        activationsCount: 0,
+                        lifetimeActivations: existingSub.lifetimeActivations,
+                        startDate: new Date(),
+                        nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + THIRTY_DAYS_MS) : null
+                    }
                 });
+            } else {
+                subscription = await prisma.subscription.create({
+                    data: {
+                        email,
+                        type,
+                        status: 'active',
+                        activationsCount: 0,
+                        nextActivationDate: (type === '3m' || type === '2m') ? new Date(Date.now() + THIRTY_DAYS_MS) : null
+                    }
+                });
+            }
+            console.log(`[Sub] Step 2 done: subscription #${subscription.id}`);
 
-                const encryptedSession = encrypt(typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson);
+            // 2b. Save/Update session (separate from subscription to avoid transaction stack overflow)
+            console.log(`[Sub] Step 2b: Saving session for ${email}...`);
+            let expiresAt = new Date(Date.now() + NINETY_DAYS_MS);
+            const parsedSession = typeof sessionJson === 'string' ? (() => { try { return JSON.parse(sessionJson); } catch { return null; } })() : sessionJson;
+            if (parsedSession && parsedSession.expires) {
+                expiresAt = new Date(parsedSession.expires);
+            }
 
-                if (existingSession) {
-                    await tx.session.update({
-                        where: { id: existingSession.id },
-                        data: {
-                            sessionJson: encryptedSession,
-                            expiresAt,
-                            telegramId: BigInt(telegramId)
-                        }
-                    });
-                } else {
-                    await tx.session.create({
-                        data: {
-                            email,
-                            sessionJson: encryptedSession,
-                            expiresAt,
-                            telegramId: BigInt(telegramId)
-                        }
-                    });
-                }
-
-                return sub;
+            const existingSession = await prisma.session.findFirst({
+                where: { email },
+                orderBy: { createdAt: 'desc' }
             });
 
+            const encryptedSession = encrypt(typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson);
+
+            if (existingSession) {
+                await prisma.session.update({
+                    where: { id: existingSession.id },
+                    data: {
+                        sessionJson: encryptedSession,
+                        expiresAt,
+                        telegramId: BigInt(telegramId)
+                    }
+                });
+            } else {
+                await prisma.session.create({
+                    data: {
+                        email,
+                        sessionJson: encryptedSession,
+                        expiresAt,
+                        telegramId: BigInt(telegramId)
+                    }
+                });
+            }
+            console.log(`[Sub] Step 2b done: session saved`);
+
             // 3. Perform Activation (external API call — outside transaction)
-            const activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionJson);
+            // Ensure sessionJson is always a string for axios serialization safety
+            const sessionStr = typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson;
+            console.log(`[Sub #${subscription.id}] sessionJson type: ${typeof sessionJson}, length: ${sessionStr.length}`);
+            const activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionStr);
 
             if (activationResult.success) {
                 // Mark key + update subscription counts in a transaction
@@ -467,10 +470,12 @@ export class SubscriptionService {
     static async activateKeyForSubscription(subscriptionId, cdk, sessionJson) {
         try {
             const startTime = Date.now();
-            console.log(`[Sub #${subscriptionId}] Activating key ${cdk}...`);
+            // Guarantee sessionJson is a string to prevent JSON.stringify circular ref issues
+            const safeSessionJson = typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : String(sessionJson);
+            console.log(`[Sub #${subscriptionId}] Activating key ${cdk}, session length: ${safeSessionJson.length}...`);
             const response = await axios.post(ACTIVATE_API_URL, {
                 cdk,
-                sessionJson
+                sessionJson: safeSessionJson
             }, {
                 headers: { 'Authorization': `Bearer ${API_TOKEN}` },
                 timeout: 150000, // 2.5 min (activation polls up to 2 min)

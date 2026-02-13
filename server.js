@@ -300,7 +300,13 @@ app.get('/api/events', (req, res, next) => {
 
 // Broadcast events from eventBus to all SSE clients
 eventBus.on('sse', (event) => {
-    const data = `data: ${JSON.stringify(event)}\n\n`;
+    let data;
+    try {
+        data = `data: ${JSON.stringify(event, (_, v) => typeof v === 'bigint' ? v.toString() : v)}\n\n`;
+    } catch (e) {
+        console.error('SSE serialization error:', e.message);
+        return;
+    }
     for (const client of sseClients) {
         try {
             client.write(data);
@@ -603,12 +609,27 @@ app.post('/api/sessions/activate', authenticateToken, async (req, res) => {
             sessionJson
         );
 
-        // Sanitize BigInt fields before JSON serialization
-        res.json(JSON.parse(JSON.stringify(result, (_, v) => typeof v === 'bigint' ? v.toString() : v)));
+        // Safe response — extract only serializable fields
+        const safeResult = {
+            subscription: result.subscription ? {
+                id: result.subscription.id,
+                email: result.subscription.email,
+                type: result.subscription.type,
+                status: result.subscription.status,
+                activationsCount: result.subscription.activationsCount,
+                startDate: result.subscription.startDate,
+            } : null,
+            activationResult: result.activationResult ? {
+                success: result.activationResult.success,
+                message: String(result.activationResult.message || 'OK'),
+            } : null,
+        };
+        res.json(safeResult);
 
     } catch (e) {
         console.error('Subscription Error:', e.message);
-        res.status(500).json({ success: false, message: e.message });
+        console.error('Subscription Error Stack:', e.stack);
+        res.status(500).json({ success: false, message: String(e.message || 'Unknown error') });
     }
 });
 
