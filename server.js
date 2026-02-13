@@ -781,29 +781,42 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
         // --- POLL STATUS (return as soon as success=true) ---
         let attempts = 0;
-        const maxAttempts = 120; // 2 minutes (120 * 1s)
+        const maxAttempts = 60; // 1 minute (60 * 1s)
+        let consecutiveErrors = 0;
 
         while (attempts < maxAttempts) {
             await sleep(1000);
             attempts++;
 
-            const statusRes = await axios.get(`${BASE_URL}/stocks/public/outstock/${taskId}`, {
-                headers: EXTERNAL_API_HEADERS
-            });
-            const status = statusRes.data;
+            try {
+                const statusRes = await axios.get(`${BASE_URL}/stocks/public/outstock/${taskId}`, {
+                    headers: EXTERNAL_API_HEADERS,
+                    timeout: 10000, // 10s timeout per poll request
+                });
+                const status = statusRes.data;
+                consecutiveErrors = 0; // Reset on success
 
-            console.log(`[${cdk}] Poll ${attempts}: pending=${status.pending}, success=${status.success}`);
+                console.log(`[${cdk}] Poll ${attempts}: pending=${status.pending}, success=${status.success}`);
 
-            // Return immediately on success, even if pending is still true
-            if (status.success === true) {
-                console.log(`[${cdk}] Activation SUCCESS!`);
-                return res.json({ success: true, message: 'Successfully activated', data: status });
-            }
+                // Return immediately on success, even if pending is still true
+                if (status.success === true) {
+                    console.log(`[${cdk}] Activation SUCCESS!`);
+                    return res.json({ success: true, message: 'Successfully activated', data: status });
+                }
 
-            // If not pending anymore and not success — it's a failure
-            if (!status.pending) {
-                console.log(`[${cdk}] Activation FAILED: ${status.message}`);
-                return res.status(400).json({ success: false, message: status.message || 'Activation failed', data: status });
+                // If not pending anymore and not success — it's a failure
+                if (!status.pending) {
+                    console.log(`[${cdk}] Activation FAILED: ${status.message}`);
+                    return res.status(400).json({ success: false, message: status.message || 'Activation failed', data: status });
+                }
+            } catch (pollErr) {
+                consecutiveErrors++;
+                console.error(`[${cdk}] Poll ${attempts} error (${consecutiveErrors}x): ${pollErr.message}`);
+                // If 5 consecutive poll errors, abort
+                if (consecutiveErrors >= 5) {
+                    console.error(`[${cdk}] Too many consecutive poll errors, aborting.`);
+                    return res.status(502).json({ success: false, message: `Polling failed after ${consecutiveErrors} consecutive errors: ${pollErr.message}` });
+                }
             }
         }
 

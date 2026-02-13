@@ -466,16 +466,19 @@ export class SubscriptionService {
 
     static async activateKeyForSubscription(subscriptionId, cdk, sessionJson) {
         try {
+            const startTime = Date.now();
             console.log(`[Sub #${subscriptionId}] Activating key ${cdk}...`);
             const response = await axios.post(ACTIVATE_API_URL, {
                 cdk,
                 sessionJson
             }, {
-                headers: { 'Authorization': `Bearer ${API_TOKEN}` }
+                headers: { 'Authorization': `Bearer ${API_TOKEN}` },
+                timeout: 150000, // 2.5 min (activation polls up to 2 min)
             });
+            console.log(`[Sub #${subscriptionId}] Activation completed in ${Date.now() - startTime}ms`);
             return response.data;
         } catch (error) {
-            console.error(`[Sub #${subscriptionId}] Activation failed: `, error.message);
+            console.error(`[Sub #${subscriptionId}] Activation failed (${Date.now()}): `, error.message);
             return {
                 success: false,
                 message: error.response?.data?.message || error.message
