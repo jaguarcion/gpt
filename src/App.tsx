@@ -24,7 +24,6 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 
 import { AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
-import { OnboardingTour } from './components/OnboardingTour';
 import { PageTransition } from './components/PageTransition';
 
 function AnimatedRoutes() {
@@ -62,7 +61,6 @@ function App() {
         <ConfirmProvider>
           <BrowserRouter>
             <AnimatedRoutes />
-            <OnboardingTour />
           </BrowserRouter>
         </ConfirmProvider>
       </ToastProvider>
