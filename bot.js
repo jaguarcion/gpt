@@ -44,7 +44,30 @@ bot.use((ctx, next) => {
 // Map<userId, { step: 'WAITING_SESSION' | 'WAITING_EMAIL' | 'SELECT_PLAN', sessionJson: string, email: string }>
 const userStates = new Map();
 
+// Buffer for multi-message JSON input (Telegram splits messages over ~4096 chars)
+// Map<userId, { chunks: string[], timer: NodeJS.Timeout, notifiedBuffering: boolean }>
+const jsonBuffers = new Map();
+
+const JSON_BUFFER_TIMEOUT_MS = 15000; // 15 seconds to wait for more parts
+const JSON_NOTIFY_DELAY_MS = 3000;  // 3 seconds before showing "waiting for parts" message
+
+function clearJsonBuffer(userId) {
+    const buf = jsonBuffers.get(userId);
+    if (buf?.notifyTimer) clearTimeout(buf.notifyTimer);
+    if (buf?.timer) clearTimeout(buf.timer);
+    jsonBuffers.delete(userId);
+}
+
+function cleanJsonText(text) {
+    let clean = text.replace(/^```[\s\S]*?\n/, '').replace(/```$/, '').trim();
+    if (clean.startsWith('`') && clean.endsWith('`')) {
+        clean = clean.slice(1, -1);
+    }
+    return clean;
+}
+
 bot.start((ctx) => {
+    clearJsonBuffer(ctx.from.id);
     userStates.delete(ctx.from.id);
     const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('1 месяц', 'plan_1m')],
@@ -55,6 +78,7 @@ bot.start((ctx) => {
 });
 
 bot.command('cancel', (ctx) => {
+    clearJsonBuffer(ctx.from.id);
     userStates.delete(ctx.from.id);
     ctx.reply('Операция отменена. Нажмите /start чтобы начать заново.');
 });
@@ -87,19 +111,62 @@ bot.on('text', async (ctx) => {
     }
 
     if (currentState.step === 'WAITING_SESSION') {
-        // Remove markdown code blocks if present
-        let cleanText = text.replace(/^```[\s\S]*?\n/, '').replace(/```$/, '').trim();
-        // Also remove inline code blocks if wrapped in single backticks
-        if (cleanText.startsWith('`') && cleanText.endsWith('`')) {
-            cleanText = cleanText.slice(1, -1);
-        }
+        const cleanText = cleanJsonText(text);
 
-        // Validate JSON and extract email
+        // Try parsing the single message first
         let sessionData;
         try {
             sessionData = JSON.parse(cleanText);
         } catch (e) {
-            return ctx.reply('Это не похоже на валидный JSON. Пожалуйста, проверьте формат и отправьте снова, или нажмите /cancel для отмены.');
+            // Single message is not valid JSON — start or append to buffer
+            const existing = jsonBuffers.get(userId);
+
+            if (existing) {
+                // Append to existing buffer
+                existing.chunks.push(cleanText);
+                clearTimeout(existing.timer);
+            } else {
+                // Start a new buffer
+                jsonBuffers.set(userId, { chunks: [cleanText], timer: null, notifyTimer: null });
+            }
+
+            const buf = jsonBuffers.get(userId);
+
+            // Try to parse the combined buffer
+            const combined = buf.chunks.join('');
+            try {
+                sessionData = JSON.parse(combined);
+                // Success! Combined text is valid JSON — clear buffer and proceed
+                clearJsonBuffer(userId);
+                // Fall through to the processing below
+            } catch (e2) {
+                // Still not valid — set a delayed notification (only if not already scheduled)
+                if (!buf.notifyTimer) {
+                    buf.notifyTimer = setTimeout(() => {
+                        const currentBuf = jsonBuffers.get(userId);
+                        if (currentBuf) {
+                            ctx.reply(`📥 Получено ${currentBuf.chunks.length} ${currentBuf.chunks.length === 1 ? 'часть' : 'части'} JSON. Жду остальные части... (таймаут: ${JSON_BUFFER_TIMEOUT_MS / 1000} сек)`);
+                        }
+                    }, JSON_NOTIFY_DELAY_MS);
+                }
+
+                // Reset the main timeout — if no more messages come, report error
+                if (buf.timer) clearTimeout(buf.timer);
+                buf.timer = setTimeout(() => {
+                    const finalBuf = jsonBuffers.get(userId);
+                    if (finalBuf) {
+                        const finalCombined = finalBuf.chunks.join('');
+                        try {
+                            JSON.parse(finalCombined);
+                        } catch (e3) {
+                            ctx.reply(`❌ Не удалось собрать валидный JSON из ${finalBuf.chunks.length} частей. Пожалуйста, проверьте формат и отправьте снова, или нажмите /cancel для отмены.`);
+                        }
+                        clearJsonBuffer(userId);
+                    }
+                }, JSON_BUFFER_TIMEOUT_MS);
+
+                return; // Wait for more messages
+            }
         }
 
         // Try to find email in session user object or top level
@@ -218,12 +285,14 @@ async function performActivation(ctx, email, sessionJson, type) {
         await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
     } finally {
         isFinished = true; // Ensure loop stops
+        clearJsonBuffer(userId);
         userStates.delete(userId);
         // ctx.reply('Нажмите /start для новой активации.');
     }
 }
 
 bot.action('cancel', (ctx) => {
+    clearJsonBuffer(ctx.from.id);
     userStates.delete(ctx.from.id);
     ctx.reply('Операция отменена.');
     ctx.answerCbQuery();
