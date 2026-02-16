@@ -115,6 +115,7 @@ bot.on('text', async (ctx) => {
 
         // Try parsing the single message first
         let sessionData;
+        let finalJsonString = cleanText; // Will be overwritten if buffer is used
         try {
             sessionData = JSON.parse(cleanText);
         } catch (e) {
@@ -136,6 +137,7 @@ bot.on('text', async (ctx) => {
             const combined = buf.chunks.join('');
             try {
                 sessionData = JSON.parse(combined);
+                finalJsonString = combined; // Use the full combined JSON
                 // Success! Combined text is valid JSON — clear buffer and proceed
                 clearJsonBuffer(userId);
                 // Fall through to the processing below
@@ -174,14 +176,14 @@ bot.on('text', async (ctx) => {
 
         if (!email) {
             // Ask for email manually if not found
-            currentState.sessionJson = cleanText;
+            currentState.sessionJson = finalJsonString;
             currentState.step = 'WAITING_EMAIL';
             userStates.set(userId, currentState);
             return ctx.reply('Не удалось найти email в JSON сессии.\n\nПожалуйста, отправьте *email* аккаунта отдельным сообщением:', { parse_mode: 'Markdown' });
         }
 
         // Proceed to activation
-        await performActivation(ctx, email, cleanText, currentState.type);
+        await performActivation(ctx, email, finalJsonString, currentState.type);
     } else if (currentState.step === 'WAITING_EMAIL') {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
