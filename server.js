@@ -488,6 +488,90 @@ app.get('/api/keys/stats', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
+    try {
+        const activeKeys = await prisma.key.findMany({
+            where: { status: 'active' },
+            select: { id: true, code: true }
+        });
+
+        if (activeKeys.length === 0) {
+            return res.json({ 
+                success: true, 
+                message: 'Нет активных ключей для проверки',
+                total: 0,
+                valid: 0,
+                invalid: 0,
+                results: []
+            });
+        }
+
+        const results = [];
+        let validCount = 0;
+        let invalidCount = 0;
+
+        for (const key of activeKeys) {
+            try {
+                const checkRes = await axios.post(`${BASE_URL}/cdks/public/check`,
+                    JSON.stringify({ code: key.code }),
+                    { headers: EXTERNAL_API_HEADERS, timeout: 15000 }
+                );
+                const checkData = checkRes.data;
+                
+                if (checkData.used) {
+                    invalidCount++;
+                    results.push({
+                        id: key.id,
+                        code: key.code,
+                        valid: false,
+                        reason: 'Ключ уже использован'
+                    });
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: { status: 'used' }
+                    });
+                } else {
+                    validCount++;
+                    results.push({
+                        id: key.id,
+                        code: key.code,
+                        valid: true
+                    });
+                }
+            } catch (checkErr) {
+                invalidCount++;
+                const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
+                results.push({
+                    id: key.id,
+                    code: key.code,
+                    valid: false,
+                    reason: errorMsg
+                });
+            }
+        }
+
+        await LogService.log('KEYS_VALIDATED', `Проверено ключей: ${activeKeys.length}, валидных: ${validCount}, невалидных: ${invalidCount}`, null, { 
+            adminIp: getClientIp(req), 
+            source: 'admin',
+            total: activeKeys.length,
+            valid: validCount,
+            invalid: invalidCount
+        });
+
+        res.json({
+            success: true,
+            message: `Проверка завершена: ${validCount} валидных, ${invalidCount} невалидных`,
+            total: activeKeys.length,
+            valid: validCount,
+            invalid: invalidCount,
+            results
+        });
+    } catch (e) {
+        console.error('Validate Active Keys Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/inventory/stats', authenticateToken, async (req, res) => {
     try {
         const stats = await KeyService.getInventoryStats();

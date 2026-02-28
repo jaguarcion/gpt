@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStats, getKeys, addKey, setAuthToken, deleteKey } from '../services/api';
+import { getStats, getKeys, addKey, setAuthToken, deleteKey, validateActiveKeys } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
 import { SkeletonCards, SkeletonTable } from '../components/Skeleton';
@@ -43,6 +43,7 @@ export function AdminPanel() {
   const toast = useToast();
   const confirm = useConfirm();
   const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
+  const [validating, setValidating] = useState(false);
 
   const loadData = async (currentPage = page, currentStatus = statusFilter) => {
     try {
@@ -198,6 +199,32 @@ export function AdminPanel() {
       }
   };
 
+  const handleValidateActiveKeys = async () => {
+      const ok = await confirm({
+          title: 'Проверка валидности ключей',
+          message: 'Проверить все активные ключи через внешний API? Это может занять некоторое время.',
+          confirmText: 'Проверить',
+      });
+      if (!ok) return;
+      
+      setValidating(true);
+      try {
+          const result = await validateActiveKeys();
+          
+          if (result.invalid > 0) {
+              toast.success(`Проверка завершена: ${result.valid} валидных, ${result.invalid} невалидных. Невалидные ключи обновлены.`);
+          } else {
+              toast.success(`Все ${result.valid} активных ключей валидны!`);
+          }
+          
+          loadData();
+      } catch (e: any) {
+          toast.error('Ошибка при проверке ключей: ' + (e.response?.data?.error || e.message));
+      } finally {
+          setValidating(false);
+      }
+  };
+
   const { sorted: sortedKeys, sortKey, sortDirection, toggleSort } = useSortable(keys);
 
   if (loading) {
@@ -274,6 +301,29 @@ export function AdminPanel() {
                 </div>
                 <TableDensityToggle density={density} onToggle={toggleDensity} />
                 <ColumnSelector columns={keyColumns} visible={visibleCols} onToggle={toggleCol} onReset={resetCols} />
+                <button 
+                    onClick={handleValidateActiveKeys}
+                    disabled={validating || statusFilter !== 'active'}
+                    className="text-sm px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 disabled:cursor-not-allowed rounded-md transition-colors text-white flex items-center gap-2"
+                    title={statusFilter !== 'active' ? 'Переключитесь на фильтр "Active" для проверки' : 'Проверить валидность активных ключей'}
+                >
+                    {validating ? (
+                        <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Проверка...
+                        </>
+                    ) : (
+                        <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Проверить валидность
+                        </>
+                    )}
+                </button>
                 <button 
                     onClick={handleExportCSV}
                     className="text-sm px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-md transition-colors text-zinc-700 dark:text-zinc-300"

@@ -230,3 +230,8 @@ export const validateAllSessions = async () => {
   const response = await adminApi.post('/sessions/validate-all');
   return response.data;
 };
+
+export const validateActiveKeys = async () => {
+  const response = await adminApi.post('/keys/validate-active');
+  return response.data;
+};
