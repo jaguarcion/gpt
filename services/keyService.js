@@ -4,7 +4,7 @@ export class KeyService {
     static async addKey(code) {
         return prisma.key.create({
             data: {
-                code,
+                code: code.trim(),
                 status: 'active'
             }
         });
@@ -20,7 +20,11 @@ export class KeyService {
         // So we should probably do one by one or filter first.
         
         let addedCount = 0;
-        for (const code of codes) {
+        for (const rawCode of codes) {
+            if (!rawCode || typeof rawCode !== 'string') continue;
+            const code = rawCode.trim();
+            if (code.length === 0) continue;
+
             try {
                 // Check if exists
                 const existing = await prisma.key.findUnique({ where: { code } });
@@ -43,6 +47,37 @@ export class KeyService {
                 status: 'active'
             }
         });
+    }
+
+    static async markKeyAsProblematic(id, reason) {
+        return prisma.key.update({
+            where: { id },
+            data: {
+                status: 'problematic',
+                usedAt: new Date(), // Mark as "used" so it doesn't get picked up again, but with status 'problematic'
+                usedByEmail: `system-error: ${reason}`.substring(0, 100)
+            }
+        });
+    }
+
+    static async cleanupKeys() {
+        // 1. Trim all active keys
+        const allKeys = await prisma.key.findMany({ where: { status: 'active' } });
+        let trimmed = 0;
+        for (const k of allKeys) {
+            if (k.code !== k.code.trim()) {
+                try {
+                    await prisma.key.update({
+                        where: { id: k.id },
+                        data: { code: k.code.trim() }
+                    });
+                    trimmed++;
+                } catch (e) {
+                    console.error(`Failed to trim key ${k.id}:`, e.message);
+                }
+            }
+        }
+        return { trimmed };
     }
 
     static async markKeyAsUsed(id, email, subscriptionId) {

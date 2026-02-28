@@ -478,6 +478,16 @@ app.delete('/api/keys/:id', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/keys/cleanup', authenticateToken, async (req, res) => {
+    try {
+        const result = await KeyService.cleanupKeys();
+        await LogService.log('KEY_CLEANUP', `Cleaned up keys: ${JSON.stringify(result)}`, null, { adminIp: getClientIp(req), source: 'admin' });
+        res.json({ success: true, ...result });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/keys/stats', authenticateToken, async (req, res) => {
     try {
         const stats = await KeyService.getStats();

@@ -333,12 +333,12 @@ export class SubscriptionService {
                 }
             }
 
-            // 1. Find available key
-            const key = await KeyService.getAvailableKey();
+            // 1. Find available key - MOVED INSIDE LOOP
+            // const key = await KeyService.getAvailableKey();
 
-            if (!key) {
-                throw new Error(`Нет доступных ключей`);
-            }
+            // if (!key) {
+            //     throw new Error(`Нет доступных ключей`);
+            // }
 
             // 2. Create/Update subscription
             console.log(`[Sub] Step 2: Creating/updating subscription for ${email}...`);
@@ -404,64 +404,95 @@ export class SubscriptionService {
             }
             console.log(`[Sub] Step 2b done: session saved`);
 
-            // 3. Perform Activation (external API call — outside transaction)
-            // Ensure sessionJson is always a string for axios serialization safety
-            const sessionStr = typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson;
-            console.log(`[Sub #${subscription.id}] sessionJson type: ${typeof sessionJson}, length: ${sessionStr.length}`);
-            const activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionStr);
+            // 3. Perform Activation with Auto-Retry
+            // Loop up to 5 times to find a working key
+            let activationResult = { success: false, message: 'No keys tried yet' };
+            const MAX_RETRIES = 5;
 
-            if (activationResult.success) {
-                // Mark key + update subscription counts in a transaction
-                await prisma.$transaction(async (tx) => {
-                    await tx.key.update({
-                        where: { id: key.id },
-                        data: {
-                            status: 'used',
-                            usedAt: new Date(),
-                            usedByEmail: email,
-                            subscriptionId: subscription.id
+            // Step 3a: We need to update subscription status to 'active' initially in step 2,
+            // but if all retries fail, we might want to revert it or leave it as is?
+            // Currently Step 2 sets it to 'active' with activationsCount = 0.
+            // If we fail here, the user sees an error, but subscription exists.
+            // This is acceptable behavior (user can retry later).
+
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                // 3a. Find available key
+                const key = await KeyService.getAvailableKey();
+
+                if (!key) {
+                    throw new Error(`Нет доступных ключей (попытка ${attempt})`);
+                }
+
+                console.log(`[Sub #${subscription.id}] Attempt ${attempt}/${MAX_RETRIES} with key ${key.code}...`);
+
+                // 3b. Activate
+                const sessionStr = typeof sessionJson === 'object' ? JSON.stringify(sessionJson) : sessionJson;
+                activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionStr);
+
+                if (activationResult.success) {
+                    // Success! Commit and break loop
+                    await prisma.$transaction(async (tx) => {
+                        await tx.key.update({
+                            where: { id: key.id },
+                            data: {
+                                status: 'used',
+                                usedAt: new Date(),
+                                usedByEmail: email,
+                                subscriptionId: subscription.id
+                            }
+                        });
+
+                        const updateData = {
+                            activationsCount: 1,
+                            lifetimeActivations: { increment: 1 }
+                        };
+
+                        if (type === '1m') {
+                            updateData.status = 'active';
+                            updateData.nextActivationDate = null;
                         }
+
+                        await tx.subscription.update({
+                            where: { id: subscription.id },
+                            data: updateData
+                        });
                     });
 
-                    const updateData = {
-                        activationsCount: 1,
-                        lifetimeActivations: { increment: 1 }
+                    await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email, { source: 'bot' });
+                    emitEvent(EVENTS.ACTIVATION, { subscriptionId: subscription.id, email, type });
+                    
+                    return {
+                        subscription: {
+                            id: subscription.id,
+                            email: subscription.email,
+                            type: subscription.type,
+                            status: subscription.status,
+                            activationsCount: subscription.activationsCount,
+                            startDate: subscription.startDate,
+                        },
+                        activationResult: {
+                            success: true,
+                            message: activationResult.message || 'OK',
+                        },
                     };
-
-                    if (type === '1m') {
-                        updateData.status = 'active';
-                        updateData.nextActivationDate = null;
+                } else {
+                    // Failure - Mark key as problematic and continue to next attempt
+                    console.warn(`[Sub] Attempt ${attempt} failed. Marking key ${key.id} as problematic: ${activationResult.message}`);
+                    try {
+                        await KeyService.markKeyAsProblematic(key.id, activationResult.message);
+                    } catch (markErr) {
+                        console.error(`[Sub] Failed to mark key ${key.id} as problematic:`, markErr.message);
                     }
-
-                    await tx.subscription.update({
-                        where: { id: subscription.id },
-                        data: updateData
-                    });
-                });
-
-                await LogService.log('ACTIVATION', `Activated subscription #${subscription.id} (${type})`, email, { source: 'bot' });
-                emitEvent(EVENTS.ACTIVATION, { subscriptionId: subscription.id, email, type });
-
-            } else {
-                await LogService.log('ERROR', `Activation failed for #${subscription.id}: ${activationResult.message}`, email, { source: 'bot' });
-                emitEvent(EVENTS.ERROR, { subscriptionId: subscription.id, email, message: activationResult.message });
-                throw new Error(`Ошибка активации: ${activationResult.message}`);
+                    
+                    // If it's the last attempt, we let the loop finish and throw error below
+                }
             }
 
-            return {
-                subscription: {
-                    id: subscription.id,
-                    email: subscription.email,
-                    type: subscription.type,
-                    status: subscription.status,
-                    activationsCount: subscription.activationsCount,
-                    startDate: subscription.startDate,
-                },
-                activationResult: {
-                    success: activationResult.success,
-                    message: activationResult.message || 'OK',
-                },
-            };
+            // If we are here, all attempts failed
+            await LogService.log('ERROR', `Activation failed after ${MAX_RETRIES} attempts. Last error: ${activationResult.message}`, email, { source: 'bot' });
+            emitEvent(EVENTS.ERROR, { subscriptionId: subscription.id, email, message: activationResult.message });
+            throw new Error(`Ошибка активации (после ${MAX_RETRIES} попыток): ${activationResult.message}`);
+
         } finally {
             processingLocks.delete(email);
         }
@@ -540,6 +571,13 @@ export class SubscriptionService {
             await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/${maxRounds}`, subscription.email, { source: 'system' });
             return { success: true, message: 'Успешно активировано', round: newCount };
         } else {
+            // Mark key as problematic
+            try {
+                await KeyService.markKeyAsProblematic(key.id, result.message);
+            } catch (e) {
+                console.error(`Failed to mark key ${key.id} as problematic:`, e);
+            }
+
             await LogService.log('ERROR', `Manual activation failed for #${subscription.id}: ${result.message}`, subscription.email, { source: 'system' });
             throw new Error(result.message || 'Ошибка активации');
         }
@@ -729,6 +767,14 @@ export class SubscriptionService {
                     emitEvent(EVENTS.RENEWAL, { subscriptionId: sub.id, email: sub.email, round: newCount, maxRounds });
                 } else {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
+                    
+                    // Mark key as problematic
+                    try {
+                        await KeyService.markKeyAsProblematic(key.id, result.message);
+                    } catch (e) {
+                        console.error(`Failed to mark key ${key.id} as problematic:`, e);
+                    }
+
                     notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
                     await LogService.log('ERROR', `Auto-renewal failed for #${sub.id}: ${result.message}`, sub.email, { source: 'scheduler' });
                     emitEvent(EVENTS.ERROR, { subscriptionId: sub.id, email: sub.email, message: result.message });
