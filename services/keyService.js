@@ -80,6 +80,38 @@ export class KeyService {
         return { trimmed };
     }
 
+    static async recoverUserErrorKeys() {
+        // Find keys marked as problematic due to user errors (not key errors)
+        const problematicKeys = await prisma.key.findMany({
+            where: {
+                status: 'problematic',
+                usedByEmail: {
+                    contains: 'system-error: user'
+                }
+            }
+        });
+
+        let recovered = 0;
+        for (const key of problematicKeys) {
+            try {
+                await prisma.key.update({
+                    where: { id: key.id },
+                    data: {
+                        status: 'active',
+                        usedAt: null,
+                        usedByEmail: null
+                    }
+                });
+                recovered++;
+                console.log(`Recovered key ${key.id}: ${key.code}`);
+            } catch (e) {
+                console.error(`Failed to recover key ${key.id}:`, e.message);
+            }
+        }
+
+        return { recovered, total: problematicKeys.length };
+    }
+
     static async markKeyAsUsed(id, email, subscriptionId) {
         return prisma.key.update({
             where: { id },

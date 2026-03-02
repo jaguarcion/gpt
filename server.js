@@ -488,6 +488,16 @@ app.post('/api/keys/cleanup', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/keys/recover-user-errors', authenticateToken, async (req, res) => {
+    try {
+        const result = await KeyService.recoverUserErrorKeys();
+        await LogService.log('KEY_RECOVERY', `Recovered keys from user errors: ${JSON.stringify(result)}`, null, { adminIp: getClientIp(req), source: 'admin' });
+        res.json({ success: true, ...result });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/keys/stats', authenticateToken, async (req, res) => {
     try {
         const stats = await KeyService.getStats();

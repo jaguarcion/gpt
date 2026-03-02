@@ -476,12 +476,25 @@ export class SubscriptionService {
                         },
                     };
                 } else {
-                    // Failure - Mark key as problematic and continue to next attempt
-                    console.warn(`[Sub] Attempt ${attempt} failed. Marking key ${key.id} as problematic: ${activationResult.message}`);
-                    try {
-                        await KeyService.markKeyAsProblematic(key.id, activationResult.message);
-                    } catch (markErr) {
-                        console.error(`[Sub] Failed to mark key ${key.id} as problematic:`, markErr.message);
+                    // Failure - Check if error is related to key or user
+                    const errorMsg = (activationResult.message || '').toLowerCase();
+                    const isUserError = errorMsg.includes('user is invalid') || 
+                                       errorMsg.includes('session') || 
+                                       errorMsg.includes('invalid user') ||
+                                       errorMsg.includes('user invalid');
+                    
+                    if (isUserError) {
+                        // User/session problem - key is fine, don't mark it as problematic
+                        console.warn(`[Sub] Attempt ${attempt} failed due to USER error (key is OK): ${activationResult.message}`);
+                        // Key stays 'active' - it will be picked up again on next attempt
+                    } else {
+                        // Key problem - mark as problematic so we don't retry it
+                        console.warn(`[Sub] Attempt ${attempt} failed due to KEY error. Marking key ${key.id} as problematic: ${activationResult.message}`);
+                        try {
+                            await KeyService.markKeyAsProblematic(key.id, activationResult.message);
+                        } catch (markErr) {
+                            console.error(`[Sub] Failed to mark key ${key.id} as problematic:`, markErr.message);
+                        }
                     }
                     
                     // If it's the last attempt, we let the loop finish and throw error below
@@ -571,11 +584,22 @@ export class SubscriptionService {
             await LogService.log('MANUAL_ACTIVATION', `Manual activation for #${subscription.id}, round ${newCount}/${maxRounds}`, subscription.email, { source: 'system' });
             return { success: true, message: 'Успешно активировано', round: newCount };
         } else {
-            // Mark key as problematic
-            try {
-                await KeyService.markKeyAsProblematic(key.id, result.message);
-            } catch (e) {
-                console.error(`Failed to mark key ${key.id} as problematic:`, e);
+            // Check if error is user-related or key-related
+            const errorMsg = (result.message || '').toLowerCase();
+            const isUserError = errorMsg.includes('user is invalid') || 
+                               errorMsg.includes('session') || 
+                               errorMsg.includes('invalid user') ||
+                               errorMsg.includes('user invalid');
+            
+            if (!isUserError) {
+                // Only mark key as problematic if it's a key issue, not user issue
+                try {
+                    await KeyService.markKeyAsProblematic(key.id, result.message);
+                } catch (e) {
+                    console.error(`Failed to mark key ${key.id} as problematic:`, e);
+                }
+            } else {
+                console.warn(`Manual activation failed due to USER error (key ${key.id} is OK): ${result.message}`);
             }
 
             await LogService.log('ERROR', `Manual activation failed for #${subscription.id}: ${result.message}`, subscription.email, { source: 'system' });
@@ -768,11 +792,22 @@ export class SubscriptionService {
                 } else {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
                     
-                    // Mark key as problematic
-                    try {
-                        await KeyService.markKeyAsProblematic(key.id, result.message);
-                    } catch (e) {
-                        console.error(`Failed to mark key ${key.id} as problematic:`, e);
+                    // Check if error is user-related or key-related
+                    const errorMsg = (result.message || '').toLowerCase();
+                    const isUserError = errorMsg.includes('user is invalid') || 
+                                       errorMsg.includes('session') || 
+                                       errorMsg.includes('invalid user') ||
+                                       errorMsg.includes('user invalid');
+                    
+                    if (!isUserError) {
+                        // Only mark key as problematic if it's a key issue
+                        try {
+                            await KeyService.markKeyAsProblematic(key.id, result.message);
+                        } catch (e) {
+                            console.error(`Failed to mark key ${key.id} as problematic:`, e);
+                        }
+                    } else {
+                        console.warn(`[Scheduler] Renewal failed due to USER error (key ${key.id} is OK): ${result.message}`);
                     }
 
                     notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
