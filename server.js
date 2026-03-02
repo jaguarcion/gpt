@@ -557,6 +557,18 @@ app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
                     valid: false,
                     reason: errorMsg
                 });
+                try {
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: { 
+                            status: 'problematic',
+                            usedAt: new Date(),
+                            usedByEmail: `validation-error: ${errorMsg}`.substring(0, 100)
+                        }
+                    });
+                } catch (updateErr) {
+                    console.error(`Failed to mark key ${key.id} as problematic:`, updateErr);
+                }
             }
         }
 
