@@ -220,8 +220,7 @@ async function performActivation(ctx, email, sessionJson, type) {
                         initialMsg.chat.id,
                         initialMsg.message_id,
                         undefined,
-                        `Данные получены (${type}, ${email}).\n${step.text}`,
-                        { parse_mode: 'Markdown' }
+                        `Данные получены (${type}, ${email}).\n${step.text}`
                     );
                 }
             } catch (e) {
@@ -248,7 +247,7 @@ async function performActivation(ctx, email, sessionJson, type) {
 
         if (result.activationResult && result.activationResult.success) {
             const taskId = result.activationResult.data?.task_id || 'N/A';
-            let msg = `Данные получены (${type}, ${email}).\n\n✅ *Успешно активировано!*\n\nВыберите срок новой активации.`;
+            let msg = `Данные получены (${type}, ${email}).\n\n✅ Успешно активировано!\n\nВыберите срок новой активации.`;
 
             if (type === '3m') {
                 msg += `\n\n📅 Это первая активация из 3-х. Следующая активация запланирована автоматически через 30 дней.`;
@@ -262,12 +261,12 @@ async function performActivation(ctx, email, sessionJson, type) {
                 [Markup.button.callback('3 месяца', 'plan_3m')]
             ]);
 
-            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { parse_mode: 'Markdown', ...keyboard });
+            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, msg, { ...keyboard });
         } else {
             const errorText = result.activationResult?.message || 'Неизвестная ошибка';
-            let failMsg = `Данные получены (${type}, ${email}).\n\n❌ *Ошибка активации*: ${errorText}`;
+            let failMsg = `Данные получены (${type}, ${email}).\n\n❌ Ошибка активации: ${errorText}`;
             failMsg += `\n\nНажмите /start для новой активации.`;
-            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
+            await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg);
         }
 
     } catch (error) {
@@ -282,9 +281,9 @@ async function performActivation(ctx, email, sessionJson, type) {
             // Handle HTML or raw string errors
             errorMsg += `\n\nОтвет сервера: ${error.response.data.substring(0, 200)}...`;
         }
-        let failMsg = `Данные получены (${type}, ${email}).\n\n❌ *Ошибка*: ${errorMsg}`;
+        let failMsg = `Данные получены (${type}, ${email}).\n\n❌ Ошибка: ${errorMsg}`;
         failMsg += `\n\nНажмите /start для новой активации.`;
-        await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg, { parse_mode: 'Markdown' });
+        await ctx.telegram.editMessageText(initialMsg.chat.id, initialMsg.message_id, undefined, failMsg);
     } finally {
         isFinished = true; // Ensure loop stops
         clearJsonBuffer(userId);
