@@ -28,27 +28,76 @@ export class KeyService {
         });
     }
 
-    static async addKeys(codes) {
+    static async inspectExistingKeys(codes, sampleLimit = 20) {
         const normalizedCodes = this.normalizeCodes(codes);
         const uniqueCodes = [...new Set(normalizedCodes)];
-
         const duplicateInPayloadCount = normalizedCodes.length - uniqueCodes.length;
+
+        if (uniqueCodes.length === 0) {
+            return {
+                received: 0,
+                unique: 0,
+                duplicateInPayloadCount: 0,
+                existingCount: 0,
+                missingCount: 0,
+                existingCodes: new Set(),
+                existingRecords: [],
+                sampleExisting: [],
+                missingSample: []
+            };
+        }
+
+        const existingRecords = await prisma.key.findMany({
+            where: {
+                code: {
+                    in: uniqueCodes
+                }
+            },
+            select: {
+                id: true,
+                code: true,
+                status: true,
+                createdAt: true,
+                usedAt: true,
+                usedByEmail: true,
+                subscriptionId: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        const existingCodes = new Set(existingRecords.map(record => record.code));
+        const missingCodes = uniqueCodes.filter(code => !existingCodes.has(code));
+
+        return {
+            received: normalizedCodes.length,
+            unique: uniqueCodes.length,
+            duplicateInPayloadCount,
+            existingCount: existingRecords.length,
+            missingCount: missingCodes.length,
+            existingCodes,
+            existingRecords,
+            sampleExisting: existingRecords.slice(0, sampleLimit),
+            missingSample: missingCodes.slice(0, sampleLimit)
+        };
+    }
+
+    static async addKeys(codes) {
+        const inspection = await this.inspectExistingKeys(codes, 10);
+        const normalizedCodes = this.normalizeCodes(codes);
+        const codesToInsert = [...new Set(normalizedCodes)].filter(code => !inspection.existingCodes.has(code));
+
         let addedCount = 0;
-        let existingCount = 0;
         let failedCount = 0;
         const errorSamples = [];
 
-        for (const code of uniqueCodes) {
+        for (const code of codesToInsert) {
             try {
-                const existing = await prisma.key.findUnique({ where: { code } });
-                if (!existing) {
-                    await prisma.key.create({
-                        data: { code, status: 'active' }
-                    });
-                    addedCount++;
-                } else {
-                    existingCount++;
-                }
+                await prisma.key.create({
+                    data: { code, status: 'active' }
+                });
+                addedCount++;
             } catch (e) {
                 failedCount++;
                 if (errorSamples.length < 5) {
@@ -61,13 +110,14 @@ export class KeyService {
         const result = {
             count: addedCount,
             inserted: addedCount,
-            received: normalizedCodes.length,
-            unique: uniqueCodes.length,
-            skipped: existingCount + duplicateInPayloadCount,
-            skippedExisting: existingCount,
-            skippedDuplicateInPayload: duplicateInPayloadCount,
+            received: inspection.received,
+            unique: inspection.unique,
+            skipped: inspection.existingCount + inspection.duplicateInPayloadCount,
+            skippedExisting: inspection.existingCount,
+            skippedDuplicateInPayload: inspection.duplicateInPayloadCount,
             failed: failedCount,
-            errorSamples
+            errorSamples,
+            sampleExisting: inspection.sampleExisting
         };
 
         console.info('[KeyImport] addKeys summary', result);

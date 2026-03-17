@@ -482,6 +482,39 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/keys/debug-existing', authenticateToken, async (req, res) => {
+    try {
+        const { code, codes } = req.body;
+        const requestId = `keys-debug-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const payload = Array.isArray(codes) ? codes : code;
+        const inspection = await KeyService.inspectExistingKeys(payload, 100);
+
+        console.info('[KeyImport] debug existing lookup', {
+            requestId,
+            received: inspection.received,
+            unique: inspection.unique,
+            existingCount: inspection.existingCount,
+            missingCount: inspection.missingCount,
+            duplicateInPayloadCount: inspection.duplicateInPayloadCount,
+            sampleExisting: inspection.sampleExisting
+        });
+
+        return res.json({
+            success: true,
+            requestId,
+            received: inspection.received,
+            unique: inspection.unique,
+            existingCount: inspection.existingCount,
+            missingCount: inspection.missingCount,
+            duplicateInPayloadCount: inspection.duplicateInPayloadCount,
+            existing: inspection.existingRecords,
+            missingSample: inspection.missingSample
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/keys', authenticateToken, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
