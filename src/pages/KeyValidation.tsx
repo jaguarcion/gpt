@@ -12,6 +12,62 @@ interface ValidationResult {
     checkedAt: string;
 }
 
+const BROWSER_CHECK_URL = 'https://receipt-api.nitro.xin/cdks/public/check';
+
+const isNetworkTimeoutReason = (reason: string) => {
+    if (!reason) return false;
+    const normalized = reason.toLowerCase();
+    return normalized.includes('timeout')
+        || normalized.includes('econnaborted')
+        || normalized.includes('external check failed after retries');
+};
+
+const validateKeyInBrowser = async (code: string): Promise<ValidationResult> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+
+    try {
+        const response = await fetch(BROWSER_CHECK_URL, {
+            method: 'POST',
+            headers: {
+                'X-Product-ID': 'chatgpt',
+                'Content-Type': 'text/plain;charset=UTF-8',
+                'Accept': 'application/json,text/plain,*/*'
+            },
+            body: JSON.stringify({ code }),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            return {
+                code,
+                status: 'NoValid',
+                reason: `Browser fallback HTTP ${response.status}`,
+                checkedAt: new Date().toISOString()
+            };
+        }
+
+        const data = await response.json();
+        const isValid = !data?.used;
+
+        return {
+            code,
+            status: isValid ? 'Valid' : 'NoValid',
+            reason: isValid ? 'OK (browser fallback)' : 'Ключ уже использован (browser fallback)',
+            checkedAt: new Date().toISOString()
+        };
+    } catch (e: any) {
+        return {
+            code,
+            status: 'NoValid',
+            reason: `Browser fallback failed: ${e.message || 'network error'}`,
+            checkedAt: new Date().toISOString()
+        };
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 export function KeyValidation() {
     const navigate = useNavigate();
     const toast = useToast();
@@ -74,12 +130,16 @@ export function KeyValidation() {
 
             for (const code of parsed.unique) {
                 const data = await validateOneKey(code);
-                const row: ValidationResult = data?.result || {
+                let row: ValidationResult = data?.result || {
                     code,
                     status: 'NoValid',
                     reason: 'Пустой ответ от сервера',
                     checkedAt: new Date().toISOString()
                 };
+
+                if (row.status === 'NoValid' && isNetworkTimeoutReason(row.reason)) {
+                    row = await validateKeyInBrowser(code);
+                }
 
                 if (row.status === 'Valid') valid++;
                 else noValid++;
