@@ -10,11 +10,14 @@ interface ValidationResult {
     status: 'Valid' | 'NoValid';
     reason: string;
     checkedAt: string;
+    source?: 'browser' | 'server';
+    transportError?: boolean;
 }
 
 const BROWSER_CHECK_URL = 'https://receipt-api.nitro.xin/cdks/public/check';
 const SERVER_SOFT_TIMEOUT_MS = 2500;
 const BROWSER_TIMEOUT_MS = 10000;
+const VALIDATION_CONCURRENCY = 4;
 
 const isNetworkTimeoutReason = (reason: string) => {
     if (!reason) return false;
@@ -45,7 +48,9 @@ const validateKeyInBrowser = async (code: string): Promise<ValidationResult> => 
                 code,
                 status: 'NoValid',
                 reason: `Browser fallback HTTP ${response.status}`,
-                checkedAt: new Date().toISOString()
+                checkedAt: new Date().toISOString(),
+                source: 'browser',
+                transportError: true
             };
         }
 
@@ -56,17 +61,48 @@ const validateKeyInBrowser = async (code: string): Promise<ValidationResult> => 
             code,
             status: isValid ? 'Valid' : 'NoValid',
             reason: isValid ? 'OK (browser fallback)' : 'Ключ уже использован (browser fallback)',
-            checkedAt: new Date().toISOString()
+            checkedAt: new Date().toISOString(),
+            source: 'browser',
+            transportError: false
         };
     } catch (e: any) {
         return {
             code,
             status: 'NoValid',
             reason: `Browser fallback failed: ${e.message || 'network error'}`,
-            checkedAt: new Date().toISOString()
+            checkedAt: new Date().toISOString(),
+            source: 'browser',
+            transportError: true
         };
     } finally {
         clearTimeout(timer);
+    }
+};
+
+const validateKeyViaServer = async (code: string): Promise<ValidationResult> => {
+    try {
+        const data = await withSoftTimeout(validateOneKey(code), SERVER_SOFT_TIMEOUT_MS);
+        const base = data?.result || {
+            code,
+            status: 'NoValid',
+            reason: 'Пустой ответ от сервера',
+            checkedAt: new Date().toISOString()
+        };
+
+        return {
+            ...base,
+            source: 'server',
+            transportError: isNetworkTimeoutReason(base.reason)
+        };
+    } catch {
+        return {
+            code,
+            status: 'NoValid',
+            reason: 'Server soft timeout',
+            checkedAt: new Date().toISOString(),
+            source: 'server',
+            transportError: true
+        };
     }
 };
 
@@ -138,45 +174,43 @@ export function KeyValidation() {
 
             let valid = 0;
             let noValid = 0;
-            let browserDirectMode = false;
+            let nextIndex = 0;
+            const workerCount = Math.min(VALIDATION_CONCURRENCY, parsed.unique.length);
 
-            for (const code of parsed.unique) {
-                let row: ValidationResult;
-
-                if (browserDirectMode) {
-                    row = await validateKeyInBrowser(code);
-                } else {
-                    try {
-                        const data = await withSoftTimeout(validateOneKey(code), SERVER_SOFT_TIMEOUT_MS);
-                        row = data?.result || {
-                            code,
-                            status: 'NoValid',
-                            reason: 'Пустой ответ от сервера',
-                            checkedAt: new Date().toISOString()
-                        };
-
-                        if (row.status === 'NoValid' && isNetworkTimeoutReason(row.reason)) {
-                            browserDirectMode = true;
-                            row = await validateKeyInBrowser(code);
-                        }
-                    } catch (e: any) {
-                        // Если сервер не ответил быстро, сразу уходим на прямую browser-проверку
-                        browserDirectMode = true;
-                        row = await validateKeyInBrowser(code);
-                    }
+            const processOne = async (code: string): Promise<ValidationResult> => {
+                // Browser-first: usually fastest and avoids server-to-API network bottleneck.
+                const browserRow = await validateKeyInBrowser(code);
+                if (!browserRow.transportError) {
+                    return browserRow;
                 }
 
-                if (row.status === 'Valid') valid++;
-                else noValid++;
+                const serverRow = await validateKeyViaServer(code);
+                return serverRow.transportError ? browserRow : serverRow;
+            };
 
-                setResults(prev => [...prev, row]);
-                setProcessed(prev => prev + 1);
-                setSummary(prev => ({
-                    ...prev,
-                    valid,
-                    noValid
-                }));
-            }
+            const worker = async () => {
+                while (true) {
+                    const current = nextIndex;
+                    if (current >= parsed.unique.length) return;
+                    nextIndex++;
+
+                    const code = parsed.unique[current];
+                    const row = await processOne(code);
+
+                    if (row.status === 'Valid') valid++;
+                    else noValid++;
+
+                    setResults(prev => [...prev, row]);
+                    setProcessed(prev => prev + 1);
+                    setSummary(prev => ({
+                        ...prev,
+                        valid,
+                        noValid
+                    }));
+                }
+            };
+
+            await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
             toast.success(`Проверка завершена. Valid: ${valid}, NoValid: ${noValid}`);
         } catch (e: any) {
@@ -258,6 +292,7 @@ export function KeyValidation() {
                                 <tr>
                                     <th className="px-4 py-3">Ключ</th>
                                     <th className="px-4 py-3">Статус</th>
+                                    <th className="px-4 py-3">Источник</th>
                                     <th className="px-4 py-3">Причина</th>
                                     <th className="px-4 py-3">Время проверки</th>
                                 </tr>
@@ -274,13 +309,14 @@ export function KeyValidation() {
                                                 {row.status}
                                             </span>
                                         </td>
+                                        <td className="px-4 py-3 text-zinc-500">{row.source || '-'}</td>
                                         <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{row.reason || '-'}</td>
                                         <td className="px-4 py-3 text-zinc-500">{new Date(row.checkedAt).toLocaleString('ru-RU')}</td>
                                     </tr>
                                 ))}
                                 {results.length === 0 && (
                                     <tr>
-                                        <td colSpan={4} className="px-4 py-10 text-center text-zinc-500">Пока нет результатов. Введите ключи и нажмите Проверить.</td>
+                                        <td colSpan={5} className="px-4 py-10 text-center text-zinc-500">Пока нет результатов. Введите ключи и нажмите Проверить.</td>
                                     </tr>
                                 )}
                             </tbody>
