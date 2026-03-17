@@ -191,6 +191,7 @@ const EXTERNAL_API_HEADERS = {
     'X-Product-ID': 'chatgpt',
     'Content-Type': 'text/plain;charset=UTF-8'
 };
+const EXTERNAL_CHECK_TIMEOUT_MS = Number(process.env.EXTERNAL_CHECK_TIMEOUT_MS || 30000);
 
 // Utility to wait
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -562,7 +563,8 @@ app.post('/api/keys/validate-one', authenticateToken, async (req, res) => {
         console.info('[KeyValidation] validate-one hit', {
             hasCode: typeof rawCode === 'string',
             codeLength: typeof rawCode === 'string' ? rawCode.length : 0,
-            ip: getClientIp(req)
+            ip: getClientIp(req),
+            timeoutMs: EXTERNAL_CHECK_TIMEOUT_MS
         });
         if (!rawCode || typeof rawCode !== 'string') {
             return res.status(400).json({ error: 'Поле code обязательно' });
@@ -577,7 +579,7 @@ app.post('/api/keys/validate-one', authenticateToken, async (req, res) => {
             const checkRes = await axios.post(
                 `${BASE_URL}/cdks/public/check`,
                 JSON.stringify({ code }),
-                { headers: EXTERNAL_API_HEADERS, timeout: 15000 }
+                { headers: EXTERNAL_API_HEADERS, timeout: EXTERNAL_CHECK_TIMEOUT_MS }
             );
 
             const checkData = checkRes.data || {};
@@ -617,7 +619,8 @@ app.post('/api/keys/validate-bulk', authenticateToken, async (req, res) => {
             codeLength: typeof code === 'string' ? code.length : 0,
             hasCodesArray: Array.isArray(codes),
             codesLength: Array.isArray(codes) ? codes.length : 0,
-            ip: getClientIp(req)
+            ip: getClientIp(req),
+            timeoutMs: EXTERNAL_CHECK_TIMEOUT_MS
         });
         const payload = Array.isArray(codes) ? codes : code;
         const normalizedCodes = KeyService.normalizeCodes(payload);
@@ -640,7 +643,7 @@ app.post('/api/keys/validate-bulk', authenticateToken, async (req, res) => {
                         const checkRes = await axios.post(
                             `${BASE_URL}/cdks/public/check`,
                             JSON.stringify({ code: keyCode }),
-                            { headers: EXTERNAL_API_HEADERS, timeout: 15000 }
+                            { headers: EXTERNAL_API_HEADERS, timeout: EXTERNAL_CHECK_TIMEOUT_MS }
                         );
 
                         const checkData = checkRes.data || {};
