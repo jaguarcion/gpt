@@ -559,6 +559,11 @@ app.post('/api/keys/debug-existing', authenticateToken, async (req, res) => {
 app.post('/api/keys/validate-one', authenticateToken, async (req, res) => {
     try {
         const rawCode = req.body?.code;
+        console.info('[KeyValidation] validate-one hit', {
+            hasCode: typeof rawCode === 'string',
+            codeLength: typeof rawCode === 'string' ? rawCode.length : 0,
+            ip: getClientIp(req)
+        });
         if (!rawCode || typeof rawCode !== 'string') {
             return res.status(400).json({ error: 'Поле code обязательно' });
         }
@@ -607,6 +612,13 @@ app.post('/api/keys/validate-one', authenticateToken, async (req, res) => {
 app.post('/api/keys/validate-bulk', authenticateToken, async (req, res) => {
     try {
         const { code, codes } = req.body;
+        console.warn('[KeyValidation] validate-bulk hit (legacy client)', {
+            hasCode: typeof code === 'string',
+            codeLength: typeof code === 'string' ? code.length : 0,
+            hasCodesArray: Array.isArray(codes),
+            codesLength: Array.isArray(codes) ? codes.length : 0,
+            ip: getClientIp(req)
+        });
         const payload = Array.isArray(codes) ? codes : code;
         const normalizedCodes = KeyService.normalizeCodes(payload);
         const uniqueCodes = [...new Set(normalizedCodes)];
