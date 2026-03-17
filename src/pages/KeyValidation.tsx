@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
-import { setAuthToken, validateKeysBulk } from '../services/api';
+import { setAuthToken, validateOneKey } from '../services/api';
 import { useToast } from '../components/Toast';
 import { ShieldCheck, SearchCheck, Copy } from 'lucide-react';
 
@@ -17,14 +17,26 @@ export function KeyValidation() {
     const toast = useToast();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [processed, setProcessed] = useState(0);
     const [results, setResults] = useState<ValidationResult[]>([]);
     const [summary, setSummary] = useState({ total: 0, valid: 0, noValid: 0, duplicateInPayload: 0 });
 
-    const parsedCount = useMemo(() => {
-        return input
+    const parseKeys = (text: string) => {
+        const normalized = text
             .split(/[\s,;]+/)
             .map(s => s.trim())
-            .filter(Boolean).length;
+            .filter(Boolean);
+
+        const unique = [...new Set(normalized)];
+        return {
+            normalized,
+            unique,
+            duplicateInPayload: normalized.length - unique.length
+        };
+    };
+
+    const parsedCount = useMemo(() => {
+        return parseKeys(input).normalized.length;
     }, [input]);
 
     const handleValidate = async () => {
@@ -41,17 +53,47 @@ export function KeyValidation() {
                 return;
             }
 
+            const parsed = parseKeys(input);
+            if (parsed.unique.length === 0) {
+                toast.error('Не найдено ключей для проверки');
+                return;
+            }
+
             setLoading(true);
-            const data = await validateKeysBulk(input);
-            setResults(data.results || []);
+            setProcessed(0);
+            setResults([]);
             setSummary({
-                total: data.total || 0,
-                valid: data.valid || 0,
-                noValid: data.noValid || 0,
-                duplicateInPayload: data.duplicateInPayload || 0
+                total: parsed.unique.length,
+                valid: 0,
+                noValid: 0,
+                duplicateInPayload: parsed.duplicateInPayload
             });
 
-            toast.success(`Проверка завершена. Valid: ${data.valid || 0}, NoValid: ${data.noValid || 0}`);
+            let valid = 0;
+            let noValid = 0;
+
+            for (const code of parsed.unique) {
+                const data = await validateOneKey(code);
+                const row: ValidationResult = data?.result || {
+                    code,
+                    status: 'NoValid',
+                    reason: 'Пустой ответ от сервера',
+                    checkedAt: new Date().toISOString()
+                };
+
+                if (row.status === 'Valid') valid++;
+                else noValid++;
+
+                setResults(prev => [...prev, row]);
+                setProcessed(prev => prev + 1);
+                setSummary(prev => ({
+                    ...prev,
+                    valid,
+                    noValid
+                }));
+            }
+
+            toast.success(`Проверка завершена. Valid: ${valid}, NoValid: ${noValid}`);
         } catch (e: any) {
             toast.error(e.response?.data?.error || e.message || 'Ошибка проверки');
         } finally {
@@ -93,6 +135,9 @@ export function KeyValidation() {
                     />
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <span className="text-xs text-zinc-500">Найдено ключей во вводе: {parsedCount}</span>
+                        {loading && (
+                            <span className="text-xs text-blue-500">Проверено: {processed}/{summary.total}</span>
+                        )}
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={handleValidate}

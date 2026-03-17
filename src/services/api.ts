@@ -244,3 +244,8 @@ export const validateKeysBulk = async (codes: string | string[]) => {
   const response = await adminApi.post('/keys/validate-bulk', { code: codes });
   return response.data;
 };
+
+export const validateOneKey = async (code: string) => {
+  const response = await adminApi.post('/keys/validate-one', { code });
+  return response.data;
+};

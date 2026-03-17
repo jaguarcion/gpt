@@ -556,6 +556,54 @@ app.post('/api/keys/debug-existing', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/keys/validate-one', authenticateToken, async (req, res) => {
+    try {
+        const rawCode = req.body?.code;
+        if (!rawCode || typeof rawCode !== 'string') {
+            return res.status(400).json({ error: 'Поле code обязательно' });
+        }
+
+        const code = rawCode.trim();
+        if (!code) {
+            return res.status(400).json({ error: 'Ключ пустой' });
+        }
+
+        try {
+            const checkRes = await axios.post(
+                `${BASE_URL}/cdks/public/check`,
+                JSON.stringify({ code }),
+                { headers: EXTERNAL_API_HEADERS, timeout: 15000 }
+            );
+
+            const checkData = checkRes.data || {};
+            const isValid = !checkData.used;
+
+            return res.json({
+                success: true,
+                result: {
+                    code,
+                    status: isValid ? 'Valid' : 'NoValid',
+                    reason: isValid ? '' : 'Ключ уже использован',
+                    checkedAt: new Date().toISOString()
+                }
+            });
+        } catch (checkErr) {
+            const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
+            return res.json({
+                success: true,
+                result: {
+                    code,
+                    status: 'NoValid',
+                    reason: errorMsg,
+                    checkedAt: new Date().toISOString()
+                }
+            });
+        }
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/keys/validate-bulk', authenticateToken, async (req, res) => {
     try {
         const { code, codes } = req.body;
