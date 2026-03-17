@@ -235,3 +235,12 @@ export const validateActiveKeys = async () => {
   const response = await adminApi.post('/keys/validate-active');
   return response.data;
 };
+
+export const validateKeysBulk = async (codes: string | string[]) => {
+  if (Array.isArray(codes)) {
+    const response = await adminApi.post('/keys/validate-bulk', { codes });
+    return response.data;
+  }
+  const response = await adminApi.post('/keys/validate-bulk', { code: codes });
+  return response.data;
+};

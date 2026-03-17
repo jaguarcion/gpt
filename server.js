@@ -556,6 +556,82 @@ app.post('/api/keys/debug-existing', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/keys/validate-bulk', authenticateToken, async (req, res) => {
+    try {
+        const { code, codes } = req.body;
+        const payload = Array.isArray(codes) ? codes : code;
+        const normalizedCodes = KeyService.normalizeCodes(payload);
+        const uniqueCodes = [...new Set(normalizedCodes)];
+
+        if (uniqueCodes.length === 0) {
+            return res.status(400).json({ error: 'Не переданы ключи для проверки' });
+        }
+
+        const results = [];
+        let valid = 0;
+        let noValid = 0;
+        const chunkSize = 5;
+
+        for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
+            const chunk = uniqueCodes.slice(i, i + chunkSize);
+            const chunkResults = await Promise.all(
+                chunk.map(async (keyCode) => {
+                    try {
+                        const checkRes = await axios.post(
+                            `${BASE_URL}/cdks/public/check`,
+                            JSON.stringify({ code: keyCode }),
+                            { headers: EXTERNAL_API_HEADERS, timeout: 15000 }
+                        );
+
+                        const checkData = checkRes.data || {};
+                        const isValid = !checkData.used;
+
+                        if (isValid) valid++;
+                        else noValid++;
+
+                        return {
+                            code: keyCode,
+                            status: isValid ? 'Valid' : 'NoValid',
+                            reason: isValid ? '' : 'Ключ уже использован',
+                            checkedAt: new Date().toISOString()
+                        };
+                    } catch (checkErr) {
+                        noValid++;
+                        const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
+                        return {
+                            code: keyCode,
+                            status: 'NoValid',
+                            reason: errorMsg,
+                            checkedAt: new Date().toISOString()
+                        };
+                    }
+                })
+            );
+
+            results.push(...chunkResults);
+        }
+
+        await LogService.log('KEY_BULK_VALIDATION', {
+            total: uniqueCodes.length,
+            valid,
+            noValid,
+            duplicateInPayload: normalizedCodes.length - uniqueCodes.length,
+            sampleNoValid: results.filter(r => r.status === 'NoValid').slice(0, 20)
+        }, null, { adminIp: getClientIp(req), source: 'admin' });
+
+        return res.json({
+            success: true,
+            total: uniqueCodes.length,
+            valid,
+            noValid,
+            duplicateInPayload: normalizedCodes.length - uniqueCodes.length,
+            results
+        });
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/keys', authenticateToken, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;

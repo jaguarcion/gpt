@@ -50,7 +50,7 @@ export class LogService {
 
         if (type) {
             if (type === 'ADMIN_ACTIONS') {
-                where.action = { in: ['ADMIN_LOGIN', 'USER_EDIT', 'KEY_ADDED', 'KEY_IMPORT_DUPLICATES', 'KEY_IMPORT_DEBUG', 'MANUAL_ACTIVATION', 'BACKUP', 'USER_DELETE'] };
+                where.action = { in: ['ADMIN_LOGIN', 'USER_EDIT', 'KEY_ADDED', 'KEY_IMPORT_DUPLICATES', 'KEY_IMPORT_DEBUG', 'KEY_BULK_VALIDATION', 'MANUAL_ACTIVATION', 'BACKUP', 'USER_DELETE'] };
             } else {
                 where.action = type;
             }

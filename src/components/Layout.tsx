@@ -122,6 +122,7 @@ export function Layout({ children }: LayoutProps) {
             icon: <Settings className="w-4 h-4" />,
             items: [
                 { path: '/admin/queue', label: 'Очередь' },
+                { path: '/admin/key-validation', label: 'Проверка' },
                 { path: '/admin/logs', label: 'Логи' },
                 { path: '/admin/health', label: 'Состояние системы' },
                 { path: '/admin/backups', label: 'Бэкапы' },
@@ -235,6 +236,7 @@ function MobileTabBar({ location }: { location: ReturnType<typeof useLocation> }
         { path: '/admin/inventory', label: 'Склад', icon: <KeyRound className="w-4 h-4" /> },
         { path: '/admin/calendar', label: 'Календарь', icon: <BarChart3 className="w-4 h-4" /> },
         { path: '/admin/health', label: 'Здоровье', icon: <Settings className="w-4 h-4" /> },
+        { path: '/admin/key-validation', label: 'Проверка', icon: <Settings className="w-4 h-4" /> },
         { path: '/admin/backups', label: 'Бэкапы', icon: <Settings className="w-4 h-4" /> },
         { path: '/admin/settings', label: 'Настройки', icon: <Settings className="w-4 h-4" /> },
     ];
