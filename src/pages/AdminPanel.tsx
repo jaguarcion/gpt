@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStats, getKeys, addKey, setAuthToken, deleteKey, validateActiveKeys } from '../services/api';
+import { getStats, getKeys, addKey, setAuthToken, deleteKey, deleteActiveKeys, validateActiveKeys } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
 import { SkeletonCards, SkeletonTable } from '../components/Skeleton';
@@ -122,6 +122,23 @@ export function AdminPanel() {
               loadData();
           }
       }, 5500);
+  };
+
+  const handleDeleteAllActive = async () => {
+      const ok = await confirm({
+          title: 'Удалить все Active ключи',
+          message: `Удалить ВСЕ ключи со статусом Active? Это действие нельзя отменить.`,
+          confirmText: 'Удалить все',
+          variant: 'danger',
+      });
+      if (!ok) return;
+      try {
+          const result = await deleteActiveKeys();
+          toast.success(`Удалено ${result.deleted} ключей`);
+          loadData();
+      } catch (e: any) {
+          toast.error(e.response?.data?.error || e.message);
+      }
   };
 
   const handleExportCSV = async () => {
@@ -303,6 +320,14 @@ export function AdminPanel() {
                 </div>
                 <TableDensityToggle density={density} onToggle={toggleDensity} />
                 <ColumnSelector columns={keyColumns} visible={visibleCols} onToggle={toggleCol} onReset={resetCols} />
+                <button 
+                    onClick={handleDeleteAllActive}
+                    disabled={statusFilter !== 'active'}
+                    className="text-sm px-3 py-1 bg-red-600 hover:bg-red-700 disabled:bg-zinc-400 disabled:cursor-not-allowed rounded-md transition-colors text-white"
+                    title={statusFilter !== 'active' ? 'Переключитесь на фильтр "Active" для удаления' : 'Удалить все Active ключи'}
+                >
+                    Удалить все Active
+                </button>
                 <button 
                     onClick={handleValidateActiveKeys}
                     disabled={validating || statusFilter !== 'active'}

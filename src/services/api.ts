@@ -110,6 +110,11 @@ export const deleteKey = async (id: number) => {
   return response.data;
 };
 
+export const deleteActiveKeys = async () => {
+  const response = await adminApi.delete('/keys/active');
+  return response.data;
+};
+
 export const addKey = async (codes: string | string[]) => {
   if (Array.isArray(codes)) {
     const response = await adminApi.post('/keys', { codes });

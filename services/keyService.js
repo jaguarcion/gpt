@@ -241,6 +241,13 @@ export class KeyService {
         });
     }
 
+    static async deleteActiveKeys() {
+        const result = await prisma.key.deleteMany({
+            where: { status: 'active' }
+        });
+        return { deleted: result.count };
+    }
+
     static async getStats() {
         const total = await prisma.key.count();
         const active = await prisma.key.count({ where: { status: 'active' } });

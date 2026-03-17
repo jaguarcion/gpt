@@ -746,6 +746,16 @@ app.get('/api/keys', authenticateToken, async (req, res) => {
     }
 });
 
+app.delete('/api/keys/active', authenticateToken, async (req, res) => {
+    try {
+        const result = await KeyService.deleteActiveKeys();
+        await LogService.log('KEY_DELETE_ACTIVE', `Deleted all active keys: ${result.deleted}`, null, { adminIp: getClientIp(req), source: 'admin' });
+        res.json({ success: true, deleted: result.deleted });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.delete('/api/keys/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
