@@ -81,14 +81,16 @@ export function AdminPanel() {
   const handleAddKey = async () => {
     try {
       if (!newKeyCodes.trim()) return;
-      
-      const codes = newKeyCodes.split('\n').map(k => k.trim()).filter(k => k.length > 0);
-      
-      if (codes.length === 0) return;
 
-      await addKey(codes);
+            const result = await addKey(newKeyCodes);
       setNewKeyCodes('');
-      toast.success(`Успешно добавлено ключей: ${codes.length}`);
+            const inserted = result?.inserted ?? result?.count ?? (result?.id ? 1 : 0);
+            const skipped = result?.skipped ?? 0;
+            toast.success(
+                skipped > 0
+                    ? `Добавлено ${inserted} ключей, пропущено ${skipped}`
+                    : `Успешно добавлено ключей: ${inserted}`
+            );
       loadData();
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message);
@@ -261,7 +263,7 @@ export function AdminPanel() {
             <textarea
               value={newKeyCodes}
               onChange={(e) => setNewKeyCodes(e.target.value)}
-              placeholder="Вставьте ключи, каждый с новой строки..."
+                            placeholder="Вставьте ключи: можно с новой строки, через пробел, таб, запятую или ;"
               rows={5}
               className="w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none font-mono text-sm"
             />

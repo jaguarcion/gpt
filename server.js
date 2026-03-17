@@ -438,11 +438,19 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
             await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
-            return res.json({ success: true, count: result.count });
+            return res.json({ success: true, ...result });
         }
 
         // Handle single upload (legacy or simple)
         if (code) {
+            const normalizedCodes = KeyService.normalizeCodes(code);
+
+            if (normalizedCodes.length > 1) {
+                const result = await KeyService.addKeys(normalizedCodes);
+                await LogService.log('KEY_ADDED', `Added ${result.count} keys via text bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
+                return res.json({ success: true, ...result });
+            }
+
             const key = await KeyService.addKey(code);
             await LogService.log('KEY_ADDED', `Added single key: ${code}`, null, { adminIp: getClientIp(req), source: 'admin' });
             return res.json(key);

@@ -1,6 +1,24 @@
 import prisma from './db.js';
 
 export class KeyService {
+    static normalizeCodes(input) {
+        const values = Array.isArray(input) ? input : [input];
+        const normalized = [];
+
+        for (const value of values) {
+            if (typeof value !== 'string') continue;
+
+            const parts = value
+                .split(/[\s,;]+/)
+                .map(part => part.trim())
+                .filter(Boolean);
+
+            normalized.push(...parts);
+        }
+
+        return normalized;
+    }
+
     static async addKey(code) {
         return prisma.key.create({
             data: {
@@ -11,34 +29,38 @@ export class KeyService {
     }
 
     static async addKeys(codes) {
-        // Create multiple keys. SQLite doesn't support createMany nicely with unique constraints in Prisma sometimes,
-        // but let's try standard createMany. It skips duplicates only if supported, but Prisma throws error on duplicate unique.
-        // We will filter existing first or catch errors.
-        // Simple approach: loop and create, ignoring errors. Or createMany.
-        // createMany is supported in SQLite since Prisma 2.x, but it doesn't return created records.
-        // Also it throws if ANY unique constraint fails.
-        // So we should probably do one by one or filter first.
-        
-        let addedCount = 0;
-        for (const rawCode of codes) {
-            if (!rawCode || typeof rawCode !== 'string') continue;
-            const code = rawCode.trim();
-            if (code.length === 0) continue;
+        const normalizedCodes = this.normalizeCodes(codes);
+        const uniqueCodes = [...new Set(normalizedCodes)];
 
+        let duplicateInPayloadCount = normalizedCodes.length - uniqueCodes.length;
+        let addedCount = 0;
+        let existingCount = 0;
+
+        for (const code of uniqueCodes) {
             try {
-                // Check if exists
                 const existing = await prisma.key.findUnique({ where: { code } });
                 if (!existing) {
                     await prisma.key.create({
                         data: { code, status: 'active' }
                     });
                     addedCount++;
+                } else {
+                    existingCount++;
                 }
             } catch (e) {
                 console.error(`Failed to add key ${code}:`, e.message);
             }
         }
-        return { count: addedCount };
+
+        return {
+            count: addedCount,
+            inserted: addedCount,
+            received: normalizedCodes.length,
+            unique: uniqueCodes.length,
+            skipped: existingCount + duplicateInPayloadCount,
+            skippedExisting: existingCount,
+            skippedDuplicateInPayload: duplicateInPayloadCount
+        };
     }
 
     static async getAvailableKey() {
