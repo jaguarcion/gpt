@@ -13,6 +13,8 @@ interface ValidationResult {
 }
 
 const BROWSER_CHECK_URL = 'https://receipt-api.nitro.xin/cdks/public/check';
+const SERVER_SOFT_TIMEOUT_MS = 2500;
+const BROWSER_TIMEOUT_MS = 10000;
 
 const isNetworkTimeoutReason = (reason: string) => {
     if (!reason) return false;
@@ -24,7 +26,7 @@ const isNetworkTimeoutReason = (reason: string) => {
 
 const validateKeyInBrowser = async (code: string): Promise<ValidationResult> => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    const timer = setTimeout(() => controller.abort(), BROWSER_TIMEOUT_MS);
 
     try {
         const response = await fetch(BROWSER_CHECK_URL, {
@@ -66,6 +68,15 @@ const validateKeyInBrowser = async (code: string): Promise<ValidationResult> => 
     } finally {
         clearTimeout(timer);
     }
+};
+
+const withSoftTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+    return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+            setTimeout(() => reject(new Error('SERVER_SOFT_TIMEOUT')), ms);
+        })
+    ]);
 };
 
 export function KeyValidation() {
@@ -127,18 +138,32 @@ export function KeyValidation() {
 
             let valid = 0;
             let noValid = 0;
+            let browserDirectMode = false;
 
             for (const code of parsed.unique) {
-                const data = await validateOneKey(code);
-                let row: ValidationResult = data?.result || {
-                    code,
-                    status: 'NoValid',
-                    reason: 'Пустой ответ от сервера',
-                    checkedAt: new Date().toISOString()
-                };
+                let row: ValidationResult;
 
-                if (row.status === 'NoValid' && isNetworkTimeoutReason(row.reason)) {
+                if (browserDirectMode) {
                     row = await validateKeyInBrowser(code);
+                } else {
+                    try {
+                        const data = await withSoftTimeout(validateOneKey(code), SERVER_SOFT_TIMEOUT_MS);
+                        row = data?.result || {
+                            code,
+                            status: 'NoValid',
+                            reason: 'Пустой ответ от сервера',
+                            checkedAt: new Date().toISOString()
+                        };
+
+                        if (row.status === 'NoValid' && isNetworkTimeoutReason(row.reason)) {
+                            browserDirectMode = true;
+                            row = await validateKeyInBrowser(code);
+                        }
+                    } catch (e: any) {
+                        // Если сервер не ответил быстро, сразу уходим на прямую browser-проверку
+                        browserDirectMode = true;
+                        row = await validateKeyInBrowser(code);
+                    }
                 }
 
                 if (row.status === 'Valid') valid++;
