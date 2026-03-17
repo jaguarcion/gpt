@@ -433,10 +433,22 @@ app.get('/api/logs/stats', authenticateToken, async (req, res) => {
 app.post('/api/keys', authenticateToken, async (req, res) => {
     try {
         const { code, codes } = req.body;
+        const requestId = `keys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+        console.info('[KeyImport] request received', {
+            requestId,
+            bodyKeys: Object.keys(req.body || {}),
+            hasCode: typeof code === 'string',
+            codeLength: typeof code === 'string' ? code.length : 0,
+            hasCodesArray: Array.isArray(codes),
+            codesLength: Array.isArray(codes) ? codes.length : 0,
+            ip: getClientIp(req)
+        });
 
         // Handle bulk upload
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
+            console.info('[KeyImport] array payload processed', { requestId, ...result });
             await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
             return res.json({ success: true, ...result });
         }
@@ -445,13 +457,21 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
         if (code) {
             const normalizedCodes = KeyService.normalizeCodes(code);
 
+            console.info('[KeyImport] text payload normalized', {
+                requestId,
+                normalizedCount: normalizedCodes.length,
+                preview: normalizedCodes.slice(0, 5)
+            });
+
             if (normalizedCodes.length > 1) {
                 const result = await KeyService.addKeys(normalizedCodes);
+                console.info('[KeyImport] text bulk payload processed', { requestId, ...result });
                 await LogService.log('KEY_ADDED', `Added ${result.count} keys via text bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
                 return res.json({ success: true, ...result });
             }
 
             const key = await KeyService.addKey(code);
+            console.info('[KeyImport] single key inserted', { requestId, code: code.trim() });
             await LogService.log('KEY_ADDED', `Added single key: ${code}`, null, { adminIp: getClientIp(req), source: 'admin' });
             return res.json(key);
         }

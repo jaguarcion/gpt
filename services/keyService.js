@@ -32,9 +32,11 @@ export class KeyService {
         const normalizedCodes = this.normalizeCodes(codes);
         const uniqueCodes = [...new Set(normalizedCodes)];
 
-        let duplicateInPayloadCount = normalizedCodes.length - uniqueCodes.length;
+        const duplicateInPayloadCount = normalizedCodes.length - uniqueCodes.length;
         let addedCount = 0;
         let existingCount = 0;
+        let failedCount = 0;
+        const errorSamples = [];
 
         for (const code of uniqueCodes) {
             try {
@@ -48,19 +50,29 @@ export class KeyService {
                     existingCount++;
                 }
             } catch (e) {
+                failedCount++;
+                if (errorSamples.length < 5) {
+                    errorSamples.push({ code, message: e.message });
+                }
                 console.error(`Failed to add key ${code}:`, e.message);
             }
         }
 
-        return {
+        const result = {
             count: addedCount,
             inserted: addedCount,
             received: normalizedCodes.length,
             unique: uniqueCodes.length,
             skipped: existingCount + duplicateInPayloadCount,
             skippedExisting: existingCount,
-            skippedDuplicateInPayload: duplicateInPayloadCount
+            skippedDuplicateInPayload: duplicateInPayloadCount,
+            failed: failedCount,
+            errorSamples
         };
+
+        console.info('[KeyImport] addKeys summary', result);
+
+        return result;
     }
 
     static async getAvailableKey() {
