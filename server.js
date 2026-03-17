@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import os from 'os';
 import crypto from 'crypto';
+import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
@@ -189,9 +190,58 @@ const BASE_URL = 'https://receipt-api.nitro.xin';
 // Common headers for external activation API
 const EXTERNAL_API_HEADERS = {
     'X-Product-ID': 'chatgpt',
-    'Content-Type': 'text/plain;charset=UTF-8'
+    'Content-Type': 'text/plain;charset=UTF-8',
+    'Accept': 'application/json,text/plain,*/*',
+    'User-Agent': 'Mozilla/5.0 (compatible; GPT-Admin/1.0)'
 };
 const EXTERNAL_CHECK_TIMEOUT_MS = Number(process.env.EXTERNAL_CHECK_TIMEOUT_MS || 30000);
+const EXTERNAL_CHECK_RETRIES = Number(process.env.EXTERNAL_CHECK_RETRIES || 1);
+const externalHttpsAgent = new https.Agent({ keepAlive: true, family: 4 });
+
+const checkExternalKey = async (code) => {
+    const attempts = [];
+    const tryCount = Math.max(1, EXTERNAL_CHECK_RETRIES + 1);
+
+    for (let i = 0; i < tryCount; i++) {
+        // First attempt uses the same payload shape as existing stable activation flow.
+        const useJsonBody = i > 0;
+        try {
+            const payload = useJsonBody ? { code } : JSON.stringify({ code });
+            const headers = useJsonBody
+                ? { ...EXTERNAL_API_HEADERS, 'Content-Type': 'application/json' }
+                : EXTERNAL_API_HEADERS;
+
+            const response = await axios.post(
+                `${BASE_URL}/cdks/public/check`,
+                payload,
+                {
+                    headers,
+                    timeout: EXTERNAL_CHECK_TIMEOUT_MS,
+                    httpsAgent: externalHttpsAgent
+                }
+            );
+
+            return response.data || {};
+        } catch (err) {
+            attempts.push({
+                attempt: i + 1,
+                mode: useJsonBody ? 'json' : 'text',
+                message: err.message,
+                code: err.code,
+                status: err.response?.status
+            });
+
+            if (i === tryCount - 1) {
+                const details = attempts
+                    .map(a => `#${a.attempt}:${a.mode}:${a.code || 'NA'}:${a.status || 'NA'}:${a.message}`)
+                    .join(' | ');
+                const error = new Error(`External check failed after retries: ${details}`);
+                error.attempts = attempts;
+                throw error;
+            }
+        }
+    }
+};
 
 // Utility to wait
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -576,13 +626,7 @@ app.post('/api/keys/validate-one', authenticateToken, async (req, res) => {
         }
 
         try {
-            const checkRes = await axios.post(
-                `${BASE_URL}/cdks/public/check`,
-                JSON.stringify({ code }),
-                { headers: EXTERNAL_API_HEADERS, timeout: EXTERNAL_CHECK_TIMEOUT_MS }
-            );
-
-            const checkData = checkRes.data || {};
+            const checkData = await checkExternalKey(code);
             const isValid = !checkData.used;
 
             return res.json({
@@ -640,13 +684,7 @@ app.post('/api/keys/validate-bulk', authenticateToken, async (req, res) => {
             const chunkResults = await Promise.all(
                 chunk.map(async (keyCode) => {
                     try {
-                        const checkRes = await axios.post(
-                            `${BASE_URL}/cdks/public/check`,
-                            JSON.stringify({ code: keyCode }),
-                            { headers: EXTERNAL_API_HEADERS, timeout: EXTERNAL_CHECK_TIMEOUT_MS }
-                        );
-
-                        const checkData = checkRes.data || {};
+                        const checkData = await checkExternalKey(keyCode);
                         const isValid = !checkData.used;
 
                         if (isValid) valid++;
