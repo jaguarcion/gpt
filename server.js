@@ -434,6 +434,7 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
     try {
         const { code, codes } = req.body;
         const requestId = `keys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const adminIp = getClientIp(req);
 
         console.info('[KeyImport] request received', {
             requestId,
@@ -449,7 +450,21 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
             console.info('[KeyImport] array payload processed', { requestId, ...result });
-            await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
+            await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp, source: 'admin' });
+            if (result.skippedExisting > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
+                await LogService.log('KEY_IMPORT_DUPLICATES', {
+                    requestId,
+                    mode: 'array',
+                    inserted: result.inserted,
+                    received: result.received,
+                    unique: result.unique,
+                    skippedExisting: result.skippedExisting,
+                    skippedDuplicateInPayload: result.skippedDuplicateInPayload,
+                    failed: result.failed,
+                    sampleExisting: result.sampleExisting,
+                    errorSamples: result.errorSamples
+                }, null, { adminIp, source: 'admin' });
+            }
             return res.json({ success: true, ...result });
         }
 
@@ -466,13 +481,27 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
             if (normalizedCodes.length > 1) {
                 const result = await KeyService.addKeys(normalizedCodes);
                 console.info('[KeyImport] text bulk payload processed', { requestId, ...result });
-                await LogService.log('KEY_ADDED', `Added ${result.count} keys via text bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
+                await LogService.log('KEY_ADDED', `Added ${result.count} keys via text bulk upload`, null, { adminIp, source: 'admin' });
+                if (result.skippedExisting > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
+                    await LogService.log('KEY_IMPORT_DUPLICATES', {
+                        requestId,
+                        mode: 'text',
+                        inserted: result.inserted,
+                        received: result.received,
+                        unique: result.unique,
+                        skippedExisting: result.skippedExisting,
+                        skippedDuplicateInPayload: result.skippedDuplicateInPayload,
+                        failed: result.failed,
+                        sampleExisting: result.sampleExisting,
+                        errorSamples: result.errorSamples
+                    }, null, { adminIp, source: 'admin' });
+                }
                 return res.json({ success: true, ...result });
             }
 
             const key = await KeyService.addKey(code);
             console.info('[KeyImport] single key inserted', { requestId, code: code.trim() });
-            await LogService.log('KEY_ADDED', `Added single key: ${code}`, null, { adminIp: getClientIp(req), source: 'admin' });
+            await LogService.log('KEY_ADDED', `Added single key: ${code}`, null, { adminIp, source: 'admin' });
             return res.json(key);
         }
 
@@ -488,6 +517,7 @@ app.post('/api/keys/debug-existing', authenticateToken, async (req, res) => {
         const requestId = `keys-debug-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const payload = Array.isArray(codes) ? codes : code;
         const inspection = await KeyService.inspectExistingKeys(payload, 100);
+        const adminIp = getClientIp(req);
 
         console.info('[KeyImport] debug existing lookup', {
             requestId,
@@ -498,6 +528,17 @@ app.post('/api/keys/debug-existing', authenticateToken, async (req, res) => {
             duplicateInPayloadCount: inspection.duplicateInPayloadCount,
             sampleExisting: inspection.sampleExisting
         });
+
+        await LogService.log('KEY_IMPORT_DEBUG', {
+            requestId,
+            received: inspection.received,
+            unique: inspection.unique,
+            existingCount: inspection.existingCount,
+            missingCount: inspection.missingCount,
+            duplicateInPayloadCount: inspection.duplicateInPayloadCount,
+            sampleExisting: inspection.sampleExisting,
+            missingSample: inspection.missingSample
+        }, null, { adminIp, source: 'admin' });
 
         return res.json({
             success: true,

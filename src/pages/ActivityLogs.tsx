@@ -16,6 +16,16 @@ export interface LogEntry {
     createdAt: string;
 }
 
+interface ImportExistingEntry {
+    id?: number;
+    code: string;
+    status?: string;
+    createdAt?: string;
+    usedAt?: string | null;
+    usedByEmail?: string | null;
+    subscriptionId?: number | null;
+}
+
 interface GroupedError {
     message: string;
     count: number;
@@ -82,9 +92,89 @@ export function ActivityLogs() {
         document.body.removeChild(link);
     };
 
+    const renderImportEntries = (entries: ImportExistingEntry[]) => {
+        if (!entries || entries.length === 0) return null;
+
+        return (
+            <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                <table className="min-w-full text-xs">
+                    <thead className="bg-zinc-50 dark:bg-zinc-900/60">
+                        <tr>
+                            <th className="px-3 py-2 text-left font-medium text-zinc-500">ID</th>
+                            <th className="px-3 py-2 text-left font-medium text-zinc-500">Ключ</th>
+                            <th className="px-3 py-2 text-left font-medium text-zinc-500">Статус</th>
+                            <th className="px-3 py-2 text-left font-medium text-zinc-500">Создан</th>
+                            <th className="px-3 py-2 text-left font-medium text-zinc-500">Использован</th>
+                            <th className="px-3 py-2 text-left font-medium text-zinc-500">Email</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                        {entries.map((entry, index) => (
+                            <tr key={`${entry.code}-${index}`}>
+                                <td className="px-3 py-2 text-zinc-500">{entry.id ?? '-'}</td>
+                                <td className="px-3 py-2 font-mono text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{entry.code}</td>
+                                <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{entry.status || '-'}</td>
+                                <td className="px-3 py-2 text-zinc-500">{entry.createdAt ? new Date(entry.createdAt).toLocaleString('ru-RU') : '-'}</td>
+                                <td className="px-3 py-2 text-zinc-500">{entry.usedAt ? new Date(entry.usedAt).toLocaleString('ru-RU') : '-'}</td>
+                                <td className="px-3 py-2 text-zinc-500 break-all">{entry.usedByEmail || '-'}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
     const renderDetails = (details: string) => {
         try {
             const parsed = JSON.parse(details);
+            if (parsed.sampleExisting || parsed.missingSample || parsed.requestId) {
+                const sampleExisting = Array.isArray(parsed.sampleExisting) ? parsed.sampleExisting : [];
+                const missingSample = Array.isArray(parsed.missingSample) ? parsed.missingSample : [];
+
+                return (
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                            <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 px-3 py-2">
+                                <div className="text-zinc-500">Request ID</div>
+                                <div className="font-mono break-all text-zinc-900 dark:text-zinc-100">{parsed.requestId || '-'}</div>
+                            </div>
+                            <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 px-3 py-2">
+                                <div className="text-zinc-500">Получено</div>
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">{parsed.received ?? '-'}</div>
+                            </div>
+                            <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 px-3 py-2">
+                                <div className="text-zinc-500">Уже были</div>
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">{parsed.skippedExisting ?? parsed.existingCount ?? '-'}</div>
+                            </div>
+                            <div className="rounded-md bg-zinc-50 dark:bg-zinc-900 px-3 py-2">
+                                <div className="text-zinc-500">Добавлено</div>
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">{parsed.inserted ?? '-'}</div>
+                            </div>
+                        </div>
+
+                        {sampleExisting.length > 0 && (
+                            <div>
+                                <div className="mb-1 text-xs font-medium text-zinc-500">Найденные дубликаты</div>
+                                {renderImportEntries(sampleExisting)}
+                            </div>
+                        )}
+
+                        {missingSample.length > 0 && (
+                            <div>
+                                <div className="mb-1 text-xs font-medium text-zinc-500">Отсутствующие ключи</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {missingSample.map((code: string) => (
+                                        <span key={code} className="rounded-md bg-zinc-50 dark:bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-700 dark:text-zinc-300">
+                                            {code}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
             if (parsed.message) return <span>{parsed.message}</span>;
             if (parsed.diff) {
                 return (
@@ -163,6 +253,8 @@ export function ActivityLogs() {
                             >
                                 <option value="">Все действия</option>
                                 <option value="ADMIN_ACTIONS">Действия админа</option>
+                                <option value="KEY_IMPORT_DUPLICATES">Импорт ключей: дубликаты</option>
+                                <option value="KEY_IMPORT_DEBUG">Импорт ключей: debug</option>
                                 <option value="ACTIVATION">Активации</option>
                                 <option value="RENEWAL">Продления</option>
                                 <option value="ERROR">Ошибки</option>
