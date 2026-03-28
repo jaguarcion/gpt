@@ -902,6 +902,20 @@ app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
     }
 });
 
+// Cached check: does the DB actually have the problematicValidationCheckedAt column?
+// Returns false if migration hasn't been applied yet (allows endpoint to work without it).
+let _probCheckedAtColExists = null;
+async function probCheckedAtColExists() {
+    if (_probCheckedAtColExists !== null) return _probCheckedAtColExists;
+    try {
+        const rows = await prisma.$queryRaw`SELECT COUNT(*) as count FROM pragma_table_info('keys') WHERE name='problematicValidationCheckedAt'`;
+        _probCheckedAtColExists = Number(rows[0].count) > 0;
+    } catch {
+        _probCheckedAtColExists = false;
+    }
+    return _probCheckedAtColExists;
+}
+
 app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) => {
     try {
         const requestedIds = Array.isArray(req.body?.ids)
@@ -913,6 +927,8 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
             ? Math.min(requestedLimitRaw, 500)
             : 50;
 
+        const hasCheckedAtCol = await probCheckedAtColExists();
+
         const baseSelect = {
             id: true,
             code: true,
@@ -920,7 +936,7 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
             usedByEmail: true,
             usedAt: true,
             subscriptionId: true,
-            problematicValidationCheckedAt: true
+            ...(hasCheckedAtCol && { problematicValidationCheckedAt: true })
         };
 
         let recentWindow = [];
@@ -948,7 +964,9 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
             });
         }
 
-        const problematicKeys = recentWindow.filter((key) => !key.problematicValidationCheckedAt);
+        const problematicKeys = hasCheckedAtCol
+            ? recentWindow.filter((key) => !key.problematicValidationCheckedAt)
+            : recentWindow;
         const skippedAlreadyChecked = recentWindow.length - problematicKeys.length;
 
         if (recentWindow.length === 0) {
@@ -995,10 +1013,12 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
                 const checkedAt = new Date();
 
                 if (checkData.used) {
-                    await prisma.key.update({
-                        where: { id: key.id },
-                        data: { problematicValidationCheckedAt: checkedAt }
-                    });
+                    if (hasCheckedAtCol) {
+                        await prisma.key.update({
+                            where: { id: key.id },
+                            data: { problematicValidationCheckedAt: checkedAt }
+                        });
+                    }
 
                     stillProblematic++;
                     results.push({
@@ -1011,10 +1031,12 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
                 }
 
                 if (key.subscriptionId) {
-                    await prisma.key.update({
-                        where: { id: key.id },
-                        data: { problematicValidationCheckedAt: checkedAt }
-                    });
+                    if (hasCheckedAtCol) {
+                        await prisma.key.update({
+                            where: { id: key.id },
+                            data: { problematicValidationCheckedAt: checkedAt }
+                        });
+                    }
 
                     conflicts++;
                     results.push({
@@ -1033,7 +1055,7 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
                         usedAt: null,
                         usedByEmail: null,
                         subscriptionId: null,
-                        problematicValidationCheckedAt: checkedAt
+                        ...(hasCheckedAtCol && { problematicValidationCheckedAt: checkedAt })
                     }
                 });
 
@@ -1049,13 +1071,15 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
                 const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
                 const checkedAt = new Date();
 
-                try {
-                    await prisma.key.update({
-                        where: { id: key.id },
-                        data: { problematicValidationCheckedAt: checkedAt }
-                    });
-                } catch (markErr) {
-                    console.error(`Failed to mark problematic-validation check for key ${key.id}:`, markErr);
+                if (hasCheckedAtCol) {
+                    try {
+                        await prisma.key.update({
+                            where: { id: key.id },
+                            data: { problematicValidationCheckedAt: checkedAt }
+                        });
+                    } catch (markErr) {
+                        console.error(`Failed to mark problematic-validation check for key ${key.id}:`, markErr);
+                    }
                 }
 
                 results.push({
