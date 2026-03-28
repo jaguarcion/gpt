@@ -47,6 +47,25 @@ const TWO_MINUTES_MS = 2 * 60 * 1000;
 const getMaxRounds = (type) => type === '3m' ? 3 : (type === '2m' ? 2 : 1);
 
 export class SubscriptionService {
+    static isUserOrSessionError(message) {
+        const errorMsg = String(message || '').toLowerCase();
+        if (!errorMsg) return false;
+
+        return (
+            errorMsg.includes('user is invalid') ||
+            errorMsg.includes('invalid user') ||
+            errorMsg.includes('user invalid') ||
+            errorMsg.includes('session') ||
+            errorMsg.includes('authentication token has been invalidated') ||
+            errorMsg.includes('token has been invalidated') ||
+            errorMsg.includes('signing in again') ||
+            errorMsg.includes('unauthorized') ||
+            errorMsg.includes('forbidden') ||
+            errorMsg.includes('401') ||
+            errorMsg.includes('403')
+        );
+    }
+
     static async getStats() {
         const total = await prisma.subscription.count();
         const active = await prisma.subscription.count({ where: { status: 'active' } });
@@ -438,7 +457,8 @@ export class SubscriptionService {
                                 status: 'used',
                                 usedAt: new Date(),
                                 usedByEmail: email,
-                                subscriptionId: subscription.id
+                                subscriptionId: subscription.id,
+                                usedValidationCheckedAt: null
                             }
                         });
 
@@ -477,11 +497,7 @@ export class SubscriptionService {
                     };
                 } else {
                     // Failure - Check if error is related to key or user
-                    const errorMsg = (activationResult.message || '').toLowerCase();
-                    const isUserError = errorMsg.includes('user is invalid') || 
-                                       errorMsg.includes('session') || 
-                                       errorMsg.includes('invalid user') ||
-                                       errorMsg.includes('user invalid');
+                    const isUserError = this.isUserOrSessionError(activationResult.message);
                     
                     if (isUserError) {
                         // User/session problem - key is fine, don't mark it as problematic
@@ -585,11 +601,7 @@ export class SubscriptionService {
             return { success: true, message: 'Успешно активировано', round: newCount };
         } else {
             // Check if error is user-related or key-related
-            const errorMsg = (result.message || '').toLowerCase();
-            const isUserError = errorMsg.includes('user is invalid') || 
-                               errorMsg.includes('session') || 
-                               errorMsg.includes('invalid user') ||
-                               errorMsg.includes('user invalid');
+            const isUserError = this.isUserOrSessionError(result.message);
             
             if (!isUserError) {
                 // Only mark key as problematic if it's a key issue, not user issue
@@ -793,11 +805,7 @@ export class SubscriptionService {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
                     
                     // Check if error is user-related or key-related
-                    const errorMsg = (result.message || '').toLowerCase();
-                    const isUserError = errorMsg.includes('user is invalid') || 
-                                       errorMsg.includes('session') || 
-                                       errorMsg.includes('invalid user') ||
-                                       errorMsg.includes('user invalid');
+                    const isUserError = this.isUserOrSessionError(result.message);
                     
                     if (!isUserError) {
                         // Only mark key as problematic if it's a key issue

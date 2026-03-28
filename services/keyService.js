@@ -183,7 +183,8 @@ export class KeyService {
                     data: {
                         status: 'active',
                         usedAt: null,
-                        usedByEmail: null
+                        usedByEmail: null,
+                        usedValidationCheckedAt: null
                     }
                 });
                 recovered++;
@@ -203,7 +204,8 @@ export class KeyService {
                 status: 'used',
                 usedAt: new Date(),
                 usedByEmail: email,
-                subscriptionId: subscriptionId
+                subscriptionId: subscriptionId,
+                usedValidationCheckedAt: null
             }
         });
     }

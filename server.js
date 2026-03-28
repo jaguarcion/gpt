@@ -837,7 +837,10 @@ app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
                     });
                     await prisma.key.update({
                         where: { id: key.id },
-                        data: { status: 'used' }
+                        data: {
+                            status: 'used',
+                            usedValidationCheckedAt: new Date()
+                        }
                     });
                 } else {
                     validCount++;
@@ -890,6 +893,206 @@ app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
     } catch (e) {
         console.error('Validate Active Keys Error:', e);
         res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
+    try {
+        const requestedIds = Array.isArray(req.body?.ids)
+            ? req.body.ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+            : [];
+
+        const requestedLimitRaw = Number(req.body?.limit);
+        const requestedLimit = Number.isInteger(requestedLimitRaw) && requestedLimitRaw > 0
+            ? Math.min(requestedLimitRaw, 500)
+            : 50;
+
+        const baseSelect = {
+            id: true,
+            code: true,
+            status: true,
+            usedByEmail: true,
+            usedAt: true,
+            subscriptionId: true,
+            usedValidationCheckedAt: true
+        };
+
+        let recentWindow = [];
+        if (requestedIds.length > 0) {
+            recentWindow = await prisma.key.findMany({
+                where: {
+                    status: 'used',
+                    id: { in: requestedIds }
+                },
+                select: baseSelect,
+                orderBy: [
+                    { usedAt: 'desc' },
+                    { createdAt: 'desc' }
+                ]
+            });
+        } else {
+            recentWindow = await prisma.key.findMany({
+                where: { status: 'used' },
+                select: baseSelect,
+                orderBy: [
+                    { usedAt: 'desc' },
+                    { createdAt: 'desc' }
+                ],
+                take: requestedLimit
+            });
+        }
+
+        const usedKeys = recentWindow.filter((key) => !key.usedValidationCheckedAt);
+        const skippedAlreadyChecked = recentWindow.length - usedKeys.length;
+
+        if (recentWindow.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Нет used-ключей для проверки',
+                total: 0,
+                windowSize: 0,
+                checkedNow: 0,
+                skippedAlreadyChecked: 0,
+                stillUsed: 0,
+                recovered: 0,
+                conflicts: 0,
+                failed: 0,
+                results: []
+            });
+        }
+
+        if (usedKeys.length === 0) {
+            return res.json({
+                success: true,
+                message: `Все ключи в выбранной выборке (${recentWindow.length}) уже проверялись ранее`,
+                total: recentWindow.length,
+                windowSize: recentWindow.length,
+                checkedNow: 0,
+                skippedAlreadyChecked,
+                stillUsed: 0,
+                recovered: 0,
+                conflicts: 0,
+                failed: 0,
+                results: []
+            });
+        }
+
+        const results = [];
+        let stillUsed = 0;
+        let recovered = 0;
+        let conflicts = 0;
+        let failed = 0;
+
+        for (const key of usedKeys) {
+            try {
+                const checkData = await checkExternalKey(key.code);
+                const checkedAt = new Date();
+
+                if (checkData.used) {
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: { usedValidationCheckedAt: checkedAt }
+                    });
+
+                    stillUsed++;
+                    results.push({
+                        id: key.id,
+                        code: key.code,
+                        state: 'still-used',
+                        message: 'Ключ действительно использован'
+                    });
+                    continue;
+                }
+
+                if (key.subscriptionId) {
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: { usedValidationCheckedAt: checkedAt }
+                    });
+
+                    conflicts++;
+                    results.push({
+                        id: key.id,
+                        code: key.code,
+                        state: 'conflict',
+                        message: `Внешняя проверка показывает not-used, но ключ привязан к подписке #${key.subscriptionId}`
+                    });
+                    continue;
+                }
+
+                await prisma.key.update({
+                    where: { id: key.id },
+                    data: {
+                        status: 'active',
+                        usedAt: null,
+                        usedByEmail: null,
+                        subscriptionId: null,
+                        usedValidationCheckedAt: checkedAt
+                    }
+                });
+
+                recovered++;
+                results.push({
+                    id: key.id,
+                    code: key.code,
+                    state: 'recovered',
+                    message: 'Ключ возвращен в active (внешняя проверка not-used)'
+                });
+            } catch (checkErr) {
+                failed++;
+                const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
+                const checkedAt = new Date();
+
+                try {
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: { usedValidationCheckedAt: checkedAt }
+                    });
+                } catch (markErr) {
+                    console.error(`Failed to mark used-validation check for key ${key.id}:`, markErr);
+                }
+
+                results.push({
+                    id: key.id,
+                    code: key.code,
+                    state: 'failed',
+                    message: errorMsg
+                });
+            }
+        }
+
+        await LogService.log('KEYS_VALIDATE_USED', {
+            total: recentWindow.length,
+            checkedNow: usedKeys.length,
+            skippedAlreadyChecked,
+            stillUsed,
+            recovered,
+            conflicts,
+            failed,
+            selectedCount: requestedIds.length || null,
+            limit: requestedIds.length > 0 ? null : requestedLimit,
+            sample: results.slice(0, 30)
+        }, null, {
+            adminIp: getClientIp(req),
+            source: 'admin'
+        });
+
+        return res.json({
+            success: true,
+            message: `Проверено ${usedKeys.length} (пропущено уже проверенных ${skippedAlreadyChecked}): подтверждено used ${stillUsed}, восстановлено ${recovered}, конфликтов ${conflicts}, ошибок ${failed}`,
+            total: recentWindow.length,
+            windowSize: recentWindow.length,
+            checkedNow: usedKeys.length,
+            skippedAlreadyChecked,
+            stillUsed,
+            recovered,
+            conflicts,
+            failed,
+            results
+        });
+    } catch (e) {
+        console.error('Validate Used Keys Error:', e);
+        return res.status(500).json({ error: e.message });
     }
 });
 
@@ -1239,8 +1442,8 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
                 console.log(`[${cdk}] Poll ${attempts}: pending=${status.pending}, success=${status.success}`);
 
-                // Return immediately on success, even if pending is still true
-                if (status.success === true) {
+                // Treat as success only when operation is finalized.
+                if (status.success === true && status.pending === false) {
                     console.log(`[${cdk}] Activation SUCCESS!`);
                     return res.json({ success: true, message: 'Successfully activated', data: status });
                 }

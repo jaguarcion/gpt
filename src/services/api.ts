@@ -241,6 +241,20 @@ export const validateActiveKeys = async () => {
   return response.data;
 };
 
+export const validateUsedKeys = async (params?: { ids?: number[]; limit?: number }) => {
+  const payload: { ids?: number[]; limit?: number } = {};
+
+  if (Array.isArray(params?.ids) && params.ids.length > 0) {
+    payload.ids = params.ids;
+  }
+  if (typeof params?.limit === 'number' && Number.isInteger(params.limit) && params.limit > 0) {
+    payload.limit = params.limit;
+  }
+
+  const response = await adminApi.post('/keys/validate-used', payload);
+  return response.data;
+};
+
 export const validateKeysBulk = async (codes: string | string[]) => {
   if (Array.isArray(codes)) {
     const response = await adminApi.post('/keys/validate-bulk', { codes });

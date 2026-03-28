@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStats, getKeys, addKey, setAuthToken, deleteKey, deleteActiveKeys, validateActiveKeys } from '../services/api';
+import { getStats, getKeys, addKey, setAuthToken, deleteKey, deleteActiveKeys, validateActiveKeys, validateUsedKeys } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
 import { SkeletonCards, SkeletonTable } from '../components/Skeleton';
@@ -44,6 +44,7 @@ export function AdminPanel() {
   const confirm = useConfirm();
   const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
   const [validating, setValidating] = useState(false);
+    const [usedValidationLimit, setUsedValidationLimit] = useState(50);
 
   const loadData = async (currentPage = page, currentStatus = statusFilter) => {
     try {
@@ -244,6 +245,43 @@ export function AdminPanel() {
       }
   };
 
+  const handleValidateUsedKeys = async () => {
+      const selectedUsedIds = keys
+          .filter(k => selectedKeys.includes(k.id) && k.status === 'used')
+          .map(k => k.id);
+
+      const useSelected = selectedUsedIds.length > 0;
+      const safeLimit = Number.isFinite(usedValidationLimit)
+          ? Math.max(1, Math.min(500, Math.trunc(usedValidationLimit)))
+          : 50;
+
+      const ok = await confirm({
+          title: 'Проверка Used ключей',
+          message: useSelected
+              ? `Проверить выбранные Used-ключи (${selectedUsedIds.length})? Для ключей not-used без привязки к подписке статус вернется в Active.`
+              : `Проверить последние ${safeLimit} Used-ключей? Уже проверенные ключи будут пропущены.`,
+          confirmText: 'Проверить',
+      });
+      if (!ok) return;
+
+      setValidating(true);
+      try {
+          const result = await validateUsedKeys({
+              ids: useSelected ? selectedUsedIds : undefined,
+              limit: useSelected ? undefined : safeLimit
+          });
+          toast.success(
+              `Проверено ${result.checkedNow ?? 0}, пропущено ${result.skippedAlreadyChecked ?? 0}: used ${result.stillUsed}, восстановлено ${result.recovered}, конфликтов ${result.conflicts}, ошибок ${result.failed}`
+          );
+          setSelectedKeys([]);
+          loadData();
+      } catch (e: any) {
+          toast.error('Ошибка при проверке Used-ключей: ' + (e.response?.data?.error || e.message));
+      } finally {
+          setValidating(false);
+      }
+  };
+
   const { sorted: sortedKeys, sortKey, sortDirection, toggleSort } = useSortable(keys);
 
   if (loading) {
@@ -351,6 +389,47 @@ export function AdminPanel() {
                         </>
                     )}
                 </button>
+                <button 
+                    onClick={handleValidateUsedKeys}
+                    disabled={validating || statusFilter !== 'used'}
+                    className="text-sm px-3 py-1 bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-400 disabled:cursor-not-allowed rounded-md transition-colors text-white flex items-center gap-2"
+                    title={statusFilter !== 'used' ? 'Переключитесь на фильтр "Used" для проверки' : (selectedKeys.length > 0 ? 'Проверить выбранные Used-ключи' : 'Проверить все Used-ключи')}
+                >
+                    {validating ? (
+                        <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Проверка...
+                        </>
+                    ) : (
+                        <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Проверить Used
+                        </>
+                    )}
+                </button>
+                <div className="flex items-center gap-2">
+                    <label htmlFor="used-limit" className="text-xs text-zinc-500">N:</label>
+                    <input
+                        id="used-limit"
+                        type="number"
+                        min={1}
+                        max={500}
+                        step={1}
+                        value={usedValidationLimit}
+                        onChange={(e) => {
+                            const value = Number(e.target.value);
+                            if (!Number.isNaN(value)) setUsedValidationLimit(value);
+                        }}
+                        disabled={validating || statusFilter !== 'used' || selectedKeys.length > 0}
+                        className="w-20 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-zinc-700 dark:text-zinc-300 disabled:opacity-60"
+                        title={selectedKeys.length > 0 ? 'При выбранных ключах лимит N не используется' : 'Сколько последних Used-ключей проверять'}
+                    />
+                </div>
                 <button 
                     onClick={handleExportCSV}
                     className="text-sm px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-md transition-colors text-zinc-700 dark:text-zinc-300"
