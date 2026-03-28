@@ -63,21 +63,27 @@ export function AdminPanel() {
   useEffect(() => {
     const savedToken = localStorage.getItem('adminToken');
     if (!savedToken) {
-      navigate('/admin');
+            navigate('/login');
       return;
     }
     setAuthToken(savedToken);
     loadData(1, 'all')
-      .catch(() => { navigate('/admin'); })
+            .catch((e) => {
+                console.error('Initial keys load failed:', e);
+                toast.error('Не удалось загрузить ключи. Проверьте сервер и базу данных.');
+            })
       .finally(() => setLoading(false));
-  }, []);
+    }, [navigate, toast]);
 
   // Reload when page or filter changes
   useEffect(() => {
       if (!loading) {
-          loadData();
+                    loadData().catch((e) => {
+                            console.error('Reload keys failed:', e);
+                            toast.error('Ошибка обновления списка ключей');
+                    });
       }
-  }, [page, statusFilter]);
+    }, [page, statusFilter, loading, toast]);
 
   const handleAddKey = async () => {
     try {
