@@ -73,7 +73,7 @@ export function AdminPanel() {
                 toast.error('Не удалось загрузить ключи. Проверьте сервер и базу данных.');
             })
       .finally(() => setLoading(false));
-    }, [navigate, toast]);
+    }, [navigate]);
 
   // Reload when page or filter changes
   useEffect(() => {
@@ -83,7 +83,7 @@ export function AdminPanel() {
                             toast.error('Ошибка обновления списка ключей');
                     });
       }
-    }, [page, statusFilter, loading, toast]);
+  }, [page, statusFilter, loading]);
 
   const handleAddKey = async () => {
     try {

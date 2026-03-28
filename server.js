@@ -140,9 +140,18 @@ app.use((req, res, next) => {
 });
 
 // Security: Rate Limiter
+const hasValidAdminBearerToken = (req) => {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || typeof authHeader !== 'string') return false;
+    if (!authHeader.startsWith('Bearer ')) return false;
+    const token = authHeader.slice(7);
+    return token === API_TOKEN;
+};
+
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // Limit each IP to 1000 requests per windowMs
+    skip: (req) => req.path.startsWith('/api/') && hasValidAdminBearerToken(req),
     message: { error: 'Too many requests, please try again later.' },
     handler: (req, res) => {
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
