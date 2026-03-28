@@ -114,7 +114,6 @@ export class KeyService {
     static async addKeys(codes) {
         const normalizedCodes = [...new Set(this.normalizeCodes(codes))];
         const duplicateInPayloadCount = this.normalizeCodes(codes).length - normalizedCodes.length;
-        const hasProblematicCheckedAtColumn = await this.hasProblematicCheckedAtColumn();
 
         let addedCount = 0;
         let updatedCount = 0;
@@ -126,32 +125,15 @@ export class KeyService {
                 const existing = await prisma.key.findUnique({ where: { code }, select: { id: true, status: true } });
                 if (existing) {
                     if (existing.status !== 'active') {
-                        const baseData = {
-                            status: 'active',
-                            usedAt: null,
-                            usedByEmail: null,
-                            subscriptionId: null,
-                            ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
-                        };
-
-                        try {
-                            await prisma.key.update({
-                                where: { id: existing.id },
-                                data: baseData
-                            });
-                        } catch (e) {
-                            if (!this.isMissingProblematicCheckedAtColumnError(e)) throw e;
-                            this._hasProblematicCheckedAtColumn = false;
-                            await prisma.key.update({
-                                where: { id: existing.id },
-                                data: {
-                                    status: 'active',
-                                    usedAt: null,
-                                    usedByEmail: null,
-                                    subscriptionId: null
-                                }
-                            });
-                        }
+                        await prisma.key.update({
+                            where: { id: existing.id },
+                            data: {
+                                status: 'active',
+                                usedAt: null,
+                                usedByEmail: null,
+                                subscriptionId: null
+                            }
+                        });
 
                         updatedCount++;
                     }
