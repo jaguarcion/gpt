@@ -1,5 +1,5 @@
--- Add marker for used-key validation checks
-ALTER TABLE "keys" ADD COLUMN "usedValidationCheckedAt" DATETIME;
+-- Add marker for problematic-key validation checks
+ALTER TABLE "keys" ADD COLUMN "problematicValidationCheckedAt" DATETIME;
 
--- Helps fast filtering of unverified used keys
-CREATE INDEX "keys_usedValidationCheckedAt_idx" ON "keys"("usedValidationCheckedAt");
+-- Helps fast filtering of unverified problematic keys
+CREATE INDEX "keys_problematicValidationCheckedAt_idx" ON "keys"("problematicValidationCheckedAt");

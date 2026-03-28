@@ -18,7 +18,7 @@ model Key {
   // type removed
   usedAt        DateTime?
   usedByEmail   String?
-  usedValidationCheckedAt DateTime?
+  problematicValidationCheckedAt DateTime?
   createdAt     DateTime       @default(now())
   
   // Relations
@@ -28,7 +28,7 @@ model Key {
 
   @@index([status])
   @@index([usedByEmail])
-  @@index([usedValidationCheckedAt])
+  @@index([problematicValidationCheckedAt])
   @@map("keys")
 }
 

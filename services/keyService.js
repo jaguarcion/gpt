@@ -184,7 +184,7 @@ export class KeyService {
                         status: 'active',
                         usedAt: null,
                         usedByEmail: null,
-                        usedValidationCheckedAt: null
+                        problematicValidationCheckedAt: null
                     }
                 });
                 recovered++;
@@ -205,7 +205,7 @@ export class KeyService {
                 usedAt: new Date(),
                 usedByEmail: email,
                 subscriptionId: subscriptionId,
-                usedValidationCheckedAt: null
+                problematicValidationCheckedAt: null
             }
         });
     }

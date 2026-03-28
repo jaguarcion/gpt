@@ -458,7 +458,7 @@ export class SubscriptionService {
                                 usedAt: new Date(),
                                 usedByEmail: email,
                                 subscriptionId: subscription.id,
-                                usedValidationCheckedAt: null
+                                problematicValidationCheckedAt: null
                             }
                         });
 

@@ -837,10 +837,7 @@ app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
                     });
                     await prisma.key.update({
                         where: { id: key.id },
-                        data: {
-                            status: 'used',
-                            usedValidationCheckedAt: new Date()
-                        }
+                        data: { status: 'used' }
                     });
                 } else {
                     validCount++;
@@ -896,7 +893,7 @@ app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
+app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) => {
     try {
         const requestedIds = Array.isArray(req.body?.ids)
             ? req.body.ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
@@ -914,14 +911,14 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
             usedByEmail: true,
             usedAt: true,
             subscriptionId: true,
-            usedValidationCheckedAt: true
+            problematicValidationCheckedAt: true
         };
 
         let recentWindow = [];
         if (requestedIds.length > 0) {
             recentWindow = await prisma.key.findMany({
                 where: {
-                    status: 'used',
+                    status: 'problematic',
                     id: { in: requestedIds }
                 },
                 select: baseSelect,
@@ -932,7 +929,7 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
             });
         } else {
             recentWindow = await prisma.key.findMany({
-                where: { status: 'used' },
+                where: { status: 'problematic' },
                 select: baseSelect,
                 orderBy: [
                     { usedAt: 'desc' },
@@ -942,18 +939,18 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
             });
         }
 
-        const usedKeys = recentWindow.filter((key) => !key.usedValidationCheckedAt);
-        const skippedAlreadyChecked = recentWindow.length - usedKeys.length;
+        const problematicKeys = recentWindow.filter((key) => !key.problematicValidationCheckedAt);
+        const skippedAlreadyChecked = recentWindow.length - problematicKeys.length;
 
         if (recentWindow.length === 0) {
             return res.json({
                 success: true,
-                message: 'Нет used-ключей для проверки',
+                message: 'Нет problematic-ключей для проверки',
                 total: 0,
                 windowSize: 0,
                 checkedNow: 0,
                 skippedAlreadyChecked: 0,
-                stillUsed: 0,
+                stillProblematic: 0,
                 recovered: 0,
                 conflicts: 0,
                 failed: 0,
@@ -961,7 +958,7 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
             });
         }
 
-        if (usedKeys.length === 0) {
+        if (problematicKeys.length === 0) {
             return res.json({
                 success: true,
                 message: `Все ключи в выбранной выборке (${recentWindow.length}) уже проверялись ранее`,
@@ -969,7 +966,7 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
                 windowSize: recentWindow.length,
                 checkedNow: 0,
                 skippedAlreadyChecked,
-                stillUsed: 0,
+                stillProblematic: 0,
                 recovered: 0,
                 conflicts: 0,
                 failed: 0,
@@ -978,12 +975,12 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
         }
 
         const results = [];
-        let stillUsed = 0;
+        let stillProblematic = 0;
         let recovered = 0;
         let conflicts = 0;
         let failed = 0;
 
-        for (const key of usedKeys) {
+        for (const key of problematicKeys) {
             try {
                 const checkData = await checkExternalKey(key.code);
                 const checkedAt = new Date();
@@ -991,15 +988,15 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
                 if (checkData.used) {
                     await prisma.key.update({
                         where: { id: key.id },
-                        data: { usedValidationCheckedAt: checkedAt }
+                        data: { problematicValidationCheckedAt: checkedAt }
                     });
 
-                    stillUsed++;
+                    stillProblematic++;
                     results.push({
                         id: key.id,
                         code: key.code,
-                        state: 'still-used',
-                        message: 'Ключ действительно использован'
+                        state: 'still-problematic',
+                        message: 'Ключ остается problematic (внешняя проверка: used)'
                     });
                     continue;
                 }
@@ -1007,7 +1004,7 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
                 if (key.subscriptionId) {
                     await prisma.key.update({
                         where: { id: key.id },
-                        data: { usedValidationCheckedAt: checkedAt }
+                        data: { problematicValidationCheckedAt: checkedAt }
                     });
 
                     conflicts++;
@@ -1027,7 +1024,7 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
                         usedAt: null,
                         usedByEmail: null,
                         subscriptionId: null,
-                        usedValidationCheckedAt: checkedAt
+                        problematicValidationCheckedAt: checkedAt
                     }
                 });
 
@@ -1046,10 +1043,10 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
                 try {
                     await prisma.key.update({
                         where: { id: key.id },
-                        data: { usedValidationCheckedAt: checkedAt }
+                        data: { problematicValidationCheckedAt: checkedAt }
                     });
                 } catch (markErr) {
-                    console.error(`Failed to mark used-validation check for key ${key.id}:`, markErr);
+                    console.error(`Failed to mark problematic-validation check for key ${key.id}:`, markErr);
                 }
 
                 results.push({
@@ -1061,11 +1058,11 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
             }
         }
 
-        await LogService.log('KEYS_VALIDATE_USED', {
+        await LogService.log('KEYS_VALIDATE_PROBLEMATIC', {
             total: recentWindow.length,
-            checkedNow: usedKeys.length,
+            checkedNow: problematicKeys.length,
             skippedAlreadyChecked,
-            stillUsed,
+            stillProblematic,
             recovered,
             conflicts,
             failed,
@@ -1079,19 +1076,19 @@ app.post('/api/keys/validate-used', authenticateToken, async (req, res) => {
 
         return res.json({
             success: true,
-            message: `Проверено ${usedKeys.length} (пропущено уже проверенных ${skippedAlreadyChecked}): подтверждено used ${stillUsed}, восстановлено ${recovered}, конфликтов ${conflicts}, ошибок ${failed}`,
+            message: `Проверено ${problematicKeys.length} (пропущено уже проверенных ${skippedAlreadyChecked}): осталось problematic ${stillProblematic}, восстановлено ${recovered}, конфликтов ${conflicts}, ошибок ${failed}`,
             total: recentWindow.length,
             windowSize: recentWindow.length,
-            checkedNow: usedKeys.length,
+            checkedNow: problematicKeys.length,
             skippedAlreadyChecked,
-            stillUsed,
+            stillProblematic,
             recovered,
             conflicts,
             failed,
             results
         });
     } catch (e) {
-        console.error('Validate Used Keys Error:', e);
+        console.error('Validate Problematic Keys Error:', e);
         return res.status(500).json({ error: e.message });
     }
 });

@@ -241,7 +241,7 @@ export const validateActiveKeys = async () => {
   return response.data;
 };
 
-export const validateUsedKeys = async (params?: { ids?: number[]; limit?: number }) => {
+export const validateProblematicKeys = async (params?: { ids?: number[]; limit?: number }) => {
   const payload: { ids?: number[]; limit?: number } = {};
 
   if (Array.isArray(params?.ids) && params.ids.length > 0) {
@@ -251,7 +251,7 @@ export const validateUsedKeys = async (params?: { ids?: number[]; limit?: number
     payload.limit = params.limit;
   }
 
-  const response = await adminApi.post('/keys/validate-used', payload);
+  const response = await adminApi.post('/keys/validate-problematic', payload);
   return response.data;
 };
 

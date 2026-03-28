@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStats, getKeys, addKey, setAuthToken, deleteKey, deleteActiveKeys, validateActiveKeys, validateUsedKeys } from '../services/api';
+import { getStats, getKeys, addKey, setAuthToken, deleteKey, deleteActiveKeys, validateActiveKeys, validateProblematicKeys } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
 import { SkeletonCards, SkeletonTable } from '../components/Skeleton';
@@ -44,7 +44,7 @@ export function AdminPanel() {
   const confirm = useConfirm();
   const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
   const [validating, setValidating] = useState(false);
-    const [usedValidationLimit, setUsedValidationLimit] = useState(50);
+    const [problematicValidationLimit, setProblematicValidationLimit] = useState(50);
 
   const loadData = async (currentPage = page, currentStatus = statusFilter) => {
     try {
@@ -245,38 +245,38 @@ export function AdminPanel() {
       }
   };
 
-  const handleValidateUsedKeys = async () => {
-      const selectedUsedIds = keys
-          .filter(k => selectedKeys.includes(k.id) && k.status === 'used')
+  const handleValidateProblematicKeys = async () => {
+      const selectedProblematicIds = keys
+          .filter(k => selectedKeys.includes(k.id) && k.status === 'problematic')
           .map(k => k.id);
 
-      const useSelected = selectedUsedIds.length > 0;
-      const safeLimit = Number.isFinite(usedValidationLimit)
-          ? Math.max(1, Math.min(500, Math.trunc(usedValidationLimit)))
+      const useSelected = selectedProblematicIds.length > 0;
+      const safeLimit = Number.isFinite(problematicValidationLimit)
+          ? Math.max(1, Math.min(500, Math.trunc(problematicValidationLimit)))
           : 50;
 
       const ok = await confirm({
-          title: 'Проверка Used ключей',
+          title: 'Проверка Problematic ключей',
           message: useSelected
-              ? `Проверить выбранные Used-ключи (${selectedUsedIds.length})? Для ключей not-used без привязки к подписке статус вернется в Active.`
-              : `Проверить последние ${safeLimit} Used-ключей? Уже проверенные ключи будут пропущены.`,
+              ? `Проверить выбранные Problematic-ключи (${selectedProblematicIds.length})? Для ключей not-used без привязки к подписке статус вернется в Active.`
+              : `Проверить последние ${safeLimit} Problematic-ключей? Уже проверенные ключи будут пропущены.`,
           confirmText: 'Проверить',
       });
       if (!ok) return;
 
       setValidating(true);
       try {
-          const result = await validateUsedKeys({
-              ids: useSelected ? selectedUsedIds : undefined,
+          const result = await validateProblematicKeys({
+              ids: useSelected ? selectedProblematicIds : undefined,
               limit: useSelected ? undefined : safeLimit
           });
           toast.success(
-              `Проверено ${result.checkedNow ?? 0}, пропущено ${result.skippedAlreadyChecked ?? 0}: used ${result.stillUsed}, восстановлено ${result.recovered}, конфликтов ${result.conflicts}, ошибок ${result.failed}`
+              `Проверено ${result.checkedNow ?? 0}, пропущено ${result.skippedAlreadyChecked ?? 0}: осталось problematic ${result.stillProblematic ?? 0}, восстановлено ${result.recovered}, конфликтов ${result.conflicts}, ошибок ${result.failed}`
           );
           setSelectedKeys([]);
           loadData();
       } catch (e: any) {
-          toast.error('Ошибка при проверке Used-ключей: ' + (e.response?.data?.error || e.message));
+          toast.error('Ошибка при проверке Problematic-ключей: ' + (e.response?.data?.error || e.message));
       } finally {
           setValidating(false);
       }
@@ -355,6 +355,12 @@ export function AdminPanel() {
                     >
                         Used
                     </button>
+                    <button 
+                        onClick={() => { setStatusFilter('problematic'); setPage(1); }}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'problematic' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/20' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                    >
+                        Problematic
+                    </button>
                 </div>
                 <TableDensityToggle density={density} onToggle={toggleDensity} />
                 <ColumnSelector columns={keyColumns} visible={visibleCols} onToggle={toggleCol} onReset={resetCols} />
@@ -390,10 +396,10 @@ export function AdminPanel() {
                     )}
                 </button>
                 <button 
-                    onClick={handleValidateUsedKeys}
-                    disabled={validating || statusFilter !== 'used'}
+                    onClick={handleValidateProblematicKeys}
+                    disabled={validating || statusFilter !== 'problematic'}
                     className="text-sm px-3 py-1 bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-400 disabled:cursor-not-allowed rounded-md transition-colors text-white flex items-center gap-2"
-                    title={statusFilter !== 'used' ? 'Переключитесь на фильтр "Used" для проверки' : (selectedKeys.length > 0 ? 'Проверить выбранные Used-ключи' : 'Проверить все Used-ключи')}
+                    title={statusFilter !== 'problematic' ? 'Переключитесь на фильтр "Problematic" для проверки' : (selectedKeys.length > 0 ? 'Проверить выбранные Problematic-ключи' : 'Проверить последние Problematic-ключи')}
                 >
                     {validating ? (
                         <>
@@ -408,26 +414,26 @@ export function AdminPanel() {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
-                            Проверить Used
+                            Проверить Problematic
                         </>
                     )}
                 </button>
                 <div className="flex items-center gap-2">
-                    <label htmlFor="used-limit" className="text-xs text-zinc-500">N:</label>
+                    <label htmlFor="problematic-limit" className="text-xs text-zinc-500">N:</label>
                     <input
-                        id="used-limit"
+                        id="problematic-limit"
                         type="number"
                         min={1}
                         max={500}
                         step={1}
-                        value={usedValidationLimit}
+                        value={problematicValidationLimit}
                         onChange={(e) => {
                             const value = Number(e.target.value);
-                            if (!Number.isNaN(value)) setUsedValidationLimit(value);
+                            if (!Number.isNaN(value)) setProblematicValidationLimit(value);
                         }}
-                        disabled={validating || statusFilter !== 'used' || selectedKeys.length > 0}
+                        disabled={validating || statusFilter !== 'problematic' || selectedKeys.length > 0}
                         className="w-20 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-zinc-700 dark:text-zinc-300 disabled:opacity-60"
-                        title={selectedKeys.length > 0 ? 'При выбранных ключах лимит N не используется' : 'Сколько последних Used-ключей проверять'}
+                        title={selectedKeys.length > 0 ? 'При выбранных ключах лимит N не используется' : 'Сколько последних Problematic-ключей проверять'}
                     />
                 </div>
                 <button 
