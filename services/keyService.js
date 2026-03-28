@@ -24,6 +24,11 @@ export class KeyService {
         return this._hasProblematicCheckedAtColumn;
     }
 
+    static isMissingProblematicCheckedAtColumnError(error) {
+        const msg = String(error?.message || '').toLowerCase();
+        return msg.includes('problematicvalidationcheckedat') && msg.includes('does not exist');
+    }
+
     static normalizeCodes(input) {
         const values = Array.isArray(input) ? input : [input];
         const normalized = [];
@@ -121,16 +126,33 @@ export class KeyService {
                 const existing = await prisma.key.findUnique({ where: { code }, select: { id: true, status: true } });
                 if (existing) {
                     if (existing.status !== 'active') {
-                        await prisma.key.update({
-                            where: { id: existing.id },
-                            data: {
-                                status: 'active',
-                                usedAt: null,
-                                usedByEmail: null,
-                                subscriptionId: null,
-                                ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
-                            }
-                        });
+                        const baseData = {
+                            status: 'active',
+                            usedAt: null,
+                            usedByEmail: null,
+                            subscriptionId: null,
+                            ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
+                        };
+
+                        try {
+                            await prisma.key.update({
+                                where: { id: existing.id },
+                                data: baseData
+                            });
+                        } catch (e) {
+                            if (!this.isMissingProblematicCheckedAtColumnError(e)) throw e;
+                            this._hasProblematicCheckedAtColumn = false;
+                            await prisma.key.update({
+                                where: { id: existing.id },
+                                data: {
+                                    status: 'active',
+                                    usedAt: null,
+                                    usedByEmail: null,
+                                    subscriptionId: null
+                                }
+                            });
+                        }
+
                         updatedCount++;
                     }
                     // already active — count as skipped duplicate (no-op)
@@ -222,15 +244,31 @@ export class KeyService {
         let recovered = 0;
         for (const key of problematicKeys) {
             try {
-                await prisma.key.update({
-                    where: { id: key.id },
-                    data: {
-                        status: 'active',
-                        usedAt: null,
-                        usedByEmail: null,
-                        ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
-                    }
-                });
+                const baseData = {
+                    status: 'active',
+                    usedAt: null,
+                    usedByEmail: null,
+                    ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
+                };
+
+                try {
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: baseData
+                    });
+                } catch (e) {
+                    if (!this.isMissingProblematicCheckedAtColumnError(e)) throw e;
+                    this._hasProblematicCheckedAtColumn = false;
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: {
+                            status: 'active',
+                            usedAt: null,
+                            usedByEmail: null
+                        }
+                    });
+                }
+
                 recovered++;
                 console.log(`Recovered key ${key.id}: ${key.code}`);
             } catch (e) {
@@ -244,16 +282,32 @@ export class KeyService {
     static async markKeyAsUsed(id, email, subscriptionId) {
         const hasProblematicCheckedAtColumn = await this.hasProblematicCheckedAtColumn();
 
-        return prisma.key.update({
-            where: { id },
-            data: {
-                status: 'used',
-                usedAt: new Date(),
-                usedByEmail: email,
-                subscriptionId: subscriptionId,
-                ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
-            }
-        });
+        const baseData = {
+            status: 'used',
+            usedAt: new Date(),
+            usedByEmail: email,
+            subscriptionId: subscriptionId,
+            ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
+        };
+
+        try {
+            return await prisma.key.update({
+                where: { id },
+                data: baseData
+            });
+        } catch (e) {
+            if (!this.isMissingProblematicCheckedAtColumnError(e)) throw e;
+            this._hasProblematicCheckedAtColumn = false;
+            return prisma.key.update({
+                where: { id },
+                data: {
+                    status: 'used',
+                    usedAt: new Date(),
+                    usedByEmail: email,
+                    subscriptionId: subscriptionId
+                }
+            });
+        }
     }
 
     static async getAllKeys(page = 1, limit = 20, status = 'all') {
