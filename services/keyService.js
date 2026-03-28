@@ -1,6 +1,8 @@
 import prisma from './db.js';
 
 export class KeyService {
+    static _hasProblematicCheckedAtColumn = null;
+
     static keyListSelect = {
         id: true,
         code: true,
@@ -10,6 +12,17 @@ export class KeyService {
         createdAt: true,
         subscriptionId: true
     };
+
+    static async hasProblematicCheckedAtColumn() {
+        if (this._hasProblematicCheckedAtColumn !== null) return this._hasProblematicCheckedAtColumn;
+        try {
+            const rows = await prisma.$queryRaw`SELECT COUNT(*) as count FROM pragma_table_info('keys') WHERE name='problematicValidationCheckedAt'`;
+            this._hasProblematicCheckedAtColumn = Number(rows[0].count) > 0;
+        } catch {
+            this._hasProblematicCheckedAtColumn = false;
+        }
+        return this._hasProblematicCheckedAtColumn;
+    }
 
     static normalizeCodes(input) {
         const values = Array.isArray(input) ? input : [input];
@@ -96,6 +109,7 @@ export class KeyService {
     static async addKeys(codes) {
         const normalizedCodes = [...new Set(this.normalizeCodes(codes))];
         const duplicateInPayloadCount = this.normalizeCodes(codes).length - normalizedCodes.length;
+        const hasProblematicCheckedAtColumn = await this.hasProblematicCheckedAtColumn();
 
         let addedCount = 0;
         let updatedCount = 0;
@@ -114,7 +128,7 @@ export class KeyService {
                                 usedAt: null,
                                 usedByEmail: null,
                                 subscriptionId: null,
-                                ...(typeof existing.problematicValidationCheckedAt !== 'undefined' && { problematicValidationCheckedAt: null })
+                                ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
                             }
                         });
                         updatedCount++;
@@ -193,6 +207,8 @@ export class KeyService {
     }
 
     static async recoverUserErrorKeys() {
+        const hasProblematicCheckedAtColumn = await this.hasProblematicCheckedAtColumn();
+
         // Find keys marked as problematic due to user errors (not key errors)
         const problematicKeys = await prisma.key.findMany({
             where: {
@@ -212,7 +228,7 @@ export class KeyService {
                         status: 'active',
                         usedAt: null,
                         usedByEmail: null,
-                        problematicValidationCheckedAt: null
+                        ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
                     }
                 });
                 recovered++;
@@ -226,6 +242,8 @@ export class KeyService {
     }
 
     static async markKeyAsUsed(id, email, subscriptionId) {
+        const hasProblematicCheckedAtColumn = await this.hasProblematicCheckedAtColumn();
+
         return prisma.key.update({
             where: { id },
             data: {
@@ -233,7 +251,7 @@ export class KeyService {
                 usedAt: new Date(),
                 usedByEmail: email,
                 subscriptionId: subscriptionId,
-                problematicValidationCheckedAt: null
+                ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
             }
         });
     }

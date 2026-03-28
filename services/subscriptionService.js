@@ -449,6 +449,8 @@ export class SubscriptionService {
                 activationResult = await this.activateKeyForSubscription(subscription.id, key.code, sessionStr);
 
                 if (activationResult.success) {
+                    const hasProblematicCheckedAtColumn = await KeyService.hasProblematicCheckedAtColumn();
+
                     // Success! Commit and break loop
                     await prisma.$transaction(async (tx) => {
                         await tx.key.update({
@@ -458,7 +460,7 @@ export class SubscriptionService {
                                 usedAt: new Date(),
                                 usedByEmail: email,
                                 subscriptionId: subscription.id,
-                                problematicValidationCheckedAt: null
+                                ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
                             }
                         });
 
