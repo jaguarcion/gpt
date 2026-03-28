@@ -94,40 +94,58 @@ export class KeyService {
     }
 
     static async addKeys(codes) {
-        const inspection = await this.inspectExistingKeys(codes, 10);
-        const normalizedCodes = this.normalizeCodes(codes);
-        const codesToInsert = [...new Set(normalizedCodes)].filter(code => !inspection.existingCodes.has(code));
+        const normalizedCodes = [...new Set(this.normalizeCodes(codes))];
+        const duplicateInPayloadCount = this.normalizeCodes(codes).length - normalizedCodes.length;
 
         let addedCount = 0;
+        let updatedCount = 0;
         let failedCount = 0;
         const errorSamples = [];
 
-        for (const code of codesToInsert) {
+        for (const code of normalizedCodes) {
             try {
-                await prisma.key.create({
-                    data: { code, status: 'active' }
-                });
-                addedCount++;
+                const existing = await prisma.key.findUnique({ where: { code }, select: { id: true, status: true } });
+                if (existing) {
+                    if (existing.status !== 'active') {
+                        await prisma.key.update({
+                            where: { id: existing.id },
+                            data: {
+                                status: 'active',
+                                usedAt: null,
+                                usedByEmail: null,
+                                subscriptionId: null,
+                                ...(typeof existing.problematicValidationCheckedAt !== 'undefined' && { problematicValidationCheckedAt: null })
+                            }
+                        });
+                        updatedCount++;
+                    }
+                    // already active — count as skipped duplicate (no-op)
+                } else {
+                    await prisma.key.create({ data: { code, status: 'active' } });
+                    addedCount++;
+                }
             } catch (e) {
                 failedCount++;
                 if (errorSamples.length < 5) {
                     errorSamples.push({ code, message: e.message });
                 }
-                console.error(`Failed to add key ${code}:`, e.message);
+                console.error(`Failed to add/update key ${code}:`, e.message);
             }
         }
 
+        const skippedActiveCount = normalizedCodes.length - addedCount - updatedCount - failedCount;
+
         const result = {
-            count: addedCount,
+            count: addedCount + updatedCount,
             inserted: addedCount,
-            received: inspection.received,
-            unique: inspection.unique,
-            skipped: inspection.existingCount + inspection.duplicateInPayloadCount,
-            skippedExisting: inspection.existingCount,
-            skippedDuplicateInPayload: inspection.duplicateInPayloadCount,
+            updated: updatedCount,
+            received: this.normalizeCodes(codes).length,
+            unique: normalizedCodes.length,
+            skipped: skippedActiveCount + duplicateInPayloadCount,
+            skippedExisting: skippedActiveCount,
+            skippedDuplicateInPayload: duplicateInPayloadCount,
             failed: failedCount,
             errorSamples,
-            sampleExisting: inspection.sampleExisting
         };
 
         console.info('[KeyImport] addKeys summary', result);

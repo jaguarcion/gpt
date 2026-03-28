@@ -92,12 +92,13 @@ export function AdminPanel() {
             const result = await addKey(newKeyCodes);
       setNewKeyCodes('');
             const inserted = result?.inserted ?? result?.count ?? (result?.id ? 1 : 0);
+            const updated = result?.updated ?? 0;
             const skipped = result?.skipped ?? 0;
-            toast.success(
-                skipped > 0
-                    ? `Добавлено ${inserted} ключей, пропущено ${skipped}`
-                    : `Успешно добавлено ключей: ${inserted}`
-            );
+            const parts: string[] = [];
+            if (inserted > 0) parts.push(`добавлено ${inserted}`);
+            if (updated > 0) parts.push(`восстановлено ${updated}`);
+            if (skipped > 0) parts.push(`пропущено ${skipped}`);
+            toast.success(parts.length > 0 ? `Ключей: ${parts.join(', ')}` : 'Импорт завершён');
       loadData();
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message);

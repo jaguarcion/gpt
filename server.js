@@ -511,17 +511,17 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
             const result = await KeyService.addKeys(codes);
             console.info('[KeyImport] array payload processed', { requestId, ...result });
             await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp, source: 'admin' });
-            if (result.skippedExisting > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
+            if (result.skippedExisting > 0 || result.updated > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
                 await LogService.log('KEY_IMPORT_DUPLICATES', {
                     requestId,
                     mode: 'array',
                     inserted: result.inserted,
+                    updated: result.updated,
                     received: result.received,
                     unique: result.unique,
                     skippedExisting: result.skippedExisting,
                     skippedDuplicateInPayload: result.skippedDuplicateInPayload,
                     failed: result.failed,
-                    sampleExisting: result.sampleExisting,
                     errorSamples: result.errorSamples
                 }, null, { adminIp, source: 'admin' });
             }
@@ -542,17 +542,17 @@ app.post('/api/keys', authenticateToken, async (req, res) => {
                 const result = await KeyService.addKeys(normalizedCodes);
                 console.info('[KeyImport] text bulk payload processed', { requestId, ...result });
                 await LogService.log('KEY_ADDED', `Added ${result.count} keys via text bulk upload`, null, { adminIp, source: 'admin' });
-                if (result.skippedExisting > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
+                if (result.skippedExisting > 0 || result.updated > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
                     await LogService.log('KEY_IMPORT_DUPLICATES', {
                         requestId,
                         mode: 'text',
                         inserted: result.inserted,
+                        updated: result.updated,
                         received: result.received,
                         unique: result.unique,
                         skippedExisting: result.skippedExisting,
                         skippedDuplicateInPayload: result.skippedDuplicateInPayload,
                         failed: result.failed,
-                        sampleExisting: result.sampleExisting,
                         errorSamples: result.errorSamples
                     }, null, { adminIp, source: 'admin' });
                 }
