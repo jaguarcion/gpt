@@ -1,6 +1,16 @@
 import prisma from './db.js';
 
 export class KeyService {
+    static keyListSelect = {
+        id: true,
+        code: true,
+        status: true,
+        usedAt: true,
+        usedByEmail: true,
+        createdAt: true,
+        subscriptionId: true
+    };
+
     static normalizeCodes(input) {
         const values = Array.isArray(input) ? input : [input];
         const normalized = [];
@@ -213,6 +223,7 @@ export class KeyService {
     static async getAllKeys(page = 1, limit = 20, status = 'all') {
         if (limit === -1) {
              return prisma.key.findMany({
+                     select: this.keyListSelect,
                 orderBy: { createdAt: 'desc' }
              });
         }
@@ -227,6 +238,7 @@ export class KeyService {
         const [keys, total] = await Promise.all([
             prisma.key.findMany({
                 where,
+                select: this.keyListSelect,
                 skip,
                 take: limit,
                 orderBy: { createdAt: 'desc' }
