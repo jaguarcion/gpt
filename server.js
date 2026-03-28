@@ -49,6 +49,30 @@ if (!API_TOKEN) {
     process.exit(1);
 }
 
+async function ensureProblematicValidationColumn() {
+    try {
+        const dbInfo = await prisma.$queryRaw`PRAGMA database_list`;
+        const mainDb = Array.isArray(dbInfo)
+            ? dbInfo.find((row) => row.name === 'main')
+            : null;
+
+        const columnRows = await prisma.$queryRaw`SELECT COUNT(*) as count FROM pragma_table_info('keys') WHERE name='problematicValidationCheckedAt'`;
+        let hasColumn = Number(columnRows?.[0]?.count || 0) > 0;
+
+        if (!hasColumn) {
+            console.warn('[DB Bootstrap] Missing keys.problematicValidationCheckedAt column. Applying runtime fix...');
+            await prisma.$executeRawUnsafe('ALTER TABLE "keys" ADD COLUMN "problematicValidationCheckedAt" DATETIME');
+            await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "keys_problematicValidationCheckedAt_idx" ON "keys"("problematicValidationCheckedAt")');
+            hasColumn = true;
+        }
+
+        console.log('[DB Bootstrap] SQLite main DB file:', mainDb?.file || '(unknown)');
+        console.log('[DB Bootstrap] keys.problematicValidationCheckedAt exists:', hasColumn);
+    } catch (e) {
+        console.error('[DB Bootstrap] Failed to verify/apply problematicValidationCheckedAt column:', e.message);
+    }
+}
+
 // ===================== RATE LIMIT TRACKING =====================
 const rateLimitTracker = {
     requests: new Map(),    // IP -> { count, firstSeen, lastSeen, paths: Map<path, count> }
@@ -2302,6 +2326,7 @@ app.post('/api/db/query', authenticateToken, async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', async () => {
+    await ensureProblematicValidationColumn();
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Endpoint: POST http://localhost:${PORT}/api/activate-key`);
 });
