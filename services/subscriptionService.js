@@ -47,6 +47,18 @@ const TWO_MINUTES_MS = 2 * 60 * 1000;
 const getMaxRounds = (type) => type === '3m' ? 3 : (type === '2m' ? 2 : 1);
 
 export class SubscriptionService {
+    static async disableAutoRenewForSubscription(subscriptionId, reason) {
+        const shortReason = String(reason || 'Unknown error').slice(0, 400);
+        await prisma.subscription.update({
+            where: { id: Number(subscriptionId) },
+            data: {
+                // Keep subscription visible/managed by admin, but stop automatic retries.
+                nextActivationDate: null,
+                note: `[AUTO-RENEW DISABLED] ${new Date().toISOString()} :: ${shortReason}`
+            }
+        });
+    }
+
     static isUserOrSessionError(message) {
         const errorMsg = String(message || '').toLowerCase();
         if (!errorMsg) return false;
@@ -756,6 +768,7 @@ export class SubscriptionService {
                 const session = await SessionService.getSessionByEmail(sub.email);
                 if (!session) {
                     console.error(`[Scheduler] Session not found for ${sub.email}`);
+                    await this.disableAutoRenewForSubscription(sub.id, 'Session not found');
                     emitEvent(EVENTS.ERROR, { email: sub.email, message: 'Session not found' });
                     continue;
                 }
@@ -763,10 +776,7 @@ export class SubscriptionService {
                 // Check session expiration
                 if (session.expiresAt < now) {
                     console.error(`[Scheduler] Session expired for ${sub.email}. Marking subscription as completed/failed.`);
-                    await prisma.subscription.update({
-                        where: { id: sub.id },
-                        data: { status: 'completed' } // Or 'expired'
-                    });
+                    await this.disableAutoRenewForSubscription(sub.id, 'Session expired');
                     emitEvent(EVENTS.ERROR, { email: sub.email, message: 'Session expired' });
                     continue;
                 }
@@ -776,8 +786,9 @@ export class SubscriptionService {
                 if (!key) {
                     console.error(`[Scheduler] No keys available for ${sub.email}`);
                     notifyAdmins(`🚨 *КРИТИЧЕСКАЯ ОШИБКА*\nЗакончились ключи для продления!\nEmail: \`${sub.email}\`\nСрочно добавьте ключи!`);
+                    await this.disableAutoRenewForSubscription(sub.id, 'No keys available');
                     emitEvent(EVENTS.ERROR, { email: sub.email, message: 'No keys available' });
-                    continue; // Try next time
+                    continue;
                 }
 
                 // Activate
@@ -805,20 +816,10 @@ export class SubscriptionService {
                     emitEvent(EVENTS.RENEWAL, { subscriptionId: sub.id, email: sub.email, round: newCount, maxRounds });
                 } else {
                     console.error(`[Scheduler] Activation failed for ${sub.email}: ${result.message}`);
-                    
-                    // Check if error is user-related or key-related
-                    const isUserError = this.isUserOrSessionError(result.message);
-                    
-                    if (!isUserError) {
-                        // Only mark key as problematic if it's a key issue
-                        try {
-                            await KeyService.markKeyAsProblematic(key.id, result.message);
-                        } catch (e) {
-                            console.error(`Failed to mark key ${key.id} as problematic:`, e);
-                        }
-                    } else {
-                        console.warn(`[Scheduler] Renewal failed due to USER error (key ${key.id} is OK): ${result.message}`);
-                    }
+
+                    // Do not mark keys as problematic on renewal failure.
+                    // Also disable auto-renew to avoid repeated daily retries.
+                    await this.disableAutoRenewForSubscription(sub.id, result.message);
 
                     notifyAdmins(`⚠️ *Ошибка продления*\nEmail: \`${sub.email}\`\nID Подписки: ${sub.id}\nОшибка: ${result.message}`);
                     await LogService.log('ERROR', `Auto-renewal failed for #${sub.id}: ${result.message}`, sub.email, { source: 'scheduler' });
