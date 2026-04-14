@@ -266,7 +266,7 @@ export function AdminPanel() {
           title: 'Проверка Problematic ключей',
           message: useSelected
               ? `Проверить выбранные Problematic-ключи (${selectedProblematicIds.length})? Для ключей not-used без привязки к подписке статус вернется в Active.`
-              : `Проверить последние ${safeLimit} Problematic-ключей? Уже проверенные ключи будут пропущены.`,
+              : `Проверить последние ${safeLimit} Problematic-ключей? Для ключей not-used без привязки к подписке статус вернется в Active.`,
           confirmText: 'Проверить',
       });
       if (!ok) return;
@@ -278,7 +278,7 @@ export function AdminPanel() {
               limit: useSelected ? undefined : safeLimit
           });
           toast.success(
-              `Проверено ${result.checkedNow ?? 0}, пропущено ${result.skippedAlreadyChecked ?? 0}: осталось problematic ${result.stillProblematic ?? 0}, восстановлено ${result.recovered}, конфликтов ${result.conflicts}, ошибок ${result.failed}`
+              `Проверено ${result.checkedNow ?? 0}: осталось problematic ${result.stillProblematic ?? 0}, восстановлено ${result.recovered}, конфликтов ${result.conflicts}, ошибок ${result.failed}`
           );
           setSelectedKeys([]);
           loadData();

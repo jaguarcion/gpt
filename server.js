@@ -988,10 +988,8 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
             });
         }
 
-        const problematicKeys = hasCheckedAtCol
-            ? recentWindow.filter((key) => !key.problematicValidationCheckedAt)
-            : recentWindow;
-        const skippedAlreadyChecked = recentWindow.length - problematicKeys.length;
+        const problematicKeys = recentWindow;
+        const skippedAlreadyChecked = 0;
 
         if (recentWindow.length === 0) {
             return res.json({
@@ -1001,22 +999,6 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
                 windowSize: 0,
                 checkedNow: 0,
                 skippedAlreadyChecked: 0,
-                stillProblematic: 0,
-                recovered: 0,
-                conflicts: 0,
-                failed: 0,
-                results: []
-            });
-        }
-
-        if (problematicKeys.length === 0) {
-            return res.json({
-                success: true,
-                message: `Все ключи в выбранной выборке (${recentWindow.length}) уже проверялись ранее`,
-                total: recentWindow.length,
-                windowSize: recentWindow.length,
-                checkedNow: 0,
-                skippedAlreadyChecked,
                 stillProblematic: 0,
                 recovered: 0,
                 conflicts: 0,
@@ -1133,7 +1115,7 @@ app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) =
 
         return res.json({
             success: true,
-            message: `Проверено ${problematicKeys.length} (пропущено уже проверенных ${skippedAlreadyChecked}): осталось problematic ${stillProblematic}, восстановлено ${recovered}, конфликтов ${conflicts}, ошибок ${failed}`,
+            message: `Проверено ${problematicKeys.length}: осталось problematic ${stillProblematic}, восстановлено ${recovered}, конфликтов ${conflicts}, ошибок ${failed}`,
             total: recentWindow.length,
             windowSize: recentWindow.length,
             checkedNow: problematicKeys.length,
