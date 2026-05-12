@@ -36,15 +36,15 @@ export function Home() {
       // Step 1: Check Key
       addLog(`Проверка ключа: ${cdkKey}...`, 'info');
       const checkResult = await checkKey(cdkKey);
-      
-      if (checkResult.used) {
-        throw new Error('Ключ уже использован.');
+
+      if (!checkResult.success) {
+        throw new Error(checkResult.data?.message || 'Ключ недействителен.');
       }
       addLog('Ключ действителен.', 'success');
 
       // Step 2: Request Activation
       addLog('Отправка запроса на активацию...', 'info');
-      
+
       let sessionData;
       try {
         sessionData = JSON.parse(sessionJson);
@@ -52,9 +52,9 @@ export function Home() {
         throw new Error('Неверный формат JSON сессии.');
       }
 
-      const activationResult = await activateKey(cdkKey, JSON.stringify(sessionData));
-      const taskId = activationResult; 
-      
+      const activationResult = await activateKey(cdkKey, sessionData);
+      const taskId = activationResult.data?.taskId;
+
       if (!taskId) {
         throw new Error('Не получен taskId от запроса активации.');
       }
@@ -64,20 +64,21 @@ export function Home() {
       addLog('Ожидание активации...', 'info');
       let isPending = true;
       let attempts = 0;
-      const maxAttempts = 60; 
-      
+      const maxAttempts = 60;
+
       while (isPending && attempts < maxAttempts) {
-        await sleep(2000); 
+        await sleep(2000);
         attempts++;
-        
+
         const statusResult = await checkStatus(taskId);
-        
-        if (!statusResult.pending) {
+        const status = statusResult.data?.status;
+
+        if (status !== 'processing') {
           isPending = false;
-          if (statusResult.success) {
+          if (status === 'success') {
             addLog('Успешно активировано!', 'success');
           } else {
-            const errorMsg = statusResult.message || 'Активация не удалась с неизвестной ошибкой.';
+            const errorMsg = statusResult.data?.message || 'Активация не удалась с неизвестной ошибкой.';
             throw new Error(errorMsg);
           }
         } else {

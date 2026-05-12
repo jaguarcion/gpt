@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Instance for External API (proxied via /api)
+// Instance for External API
 const publicApi = axios.create({
+  baseURL: 'https://kkk.ow800.com',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -39,41 +40,36 @@ export const loginWithToken = async (token: string) => {
   return response.data;
 };
 
-const externalHeaders = {
-  'X-Product-ID': 'chatgpt',
-  'Content-Type': 'text/plain;charset=UTF-8'
-};
-
 export const verifyToken = async () => {
   const response = await adminApi.get('/auth/verify');
   return response.data;
 };
 
 export const checkKey = async (code: string) => {
-  const response = await publicApi.post('/api/cdks/public/check', JSON.stringify({ code }), {
-    headers: externalHeaders
-  });
+  const response = await publicApi.post('/api/cards/verify', { cardInfo: code });
   return response.data;
 };
 
-export const checkUser = async (user: string, cdk: string) => {
-  const response = await publicApi.post('/api/external/public/check-user', JSON.stringify({ user, cdk }), {
-    headers: externalHeaders
-  });
+export const activateKey = async (
+  cdk: string,
+  sessionData: { userEmail?: string; userGptToken?: string; [key: string]: any },
+  productId?: number
+) => {
+  const body: Record<string, any> = {
+    cardInfo: cdk,
+    userEmail: sessionData.userEmail ?? '',
+    userGptToken: sessionData.userGptToken ?? '',
+    fullAuthData: JSON.stringify(sessionData),
+  };
+  if (productId !== undefined) body.productId = productId;
+  const response = await publicApi.post('/api/cards/verify-gpt', body);
   return response.data;
 };
 
-export const activateKey = async (cdk: string, user: string) => {
-  const response = await publicApi.post('/api/stocks/public/outstock', JSON.stringify({ cdk, user }), {
-    headers: externalHeaders
-  });
-  return response.data;
-};
-
-export const checkStatus = async (taskId: string) => {
-  const response = await publicApi.get(`/api/stocks/public/outstock/${taskId}`, {
-    headers: externalHeaders
-  });
+export const checkStatus = async (taskId: string, productId = 3, cardInfo?: string) => {
+  const body: Record<string, any> = { taskId, productId };
+  if (cardInfo) body.cardInfo = cardInfo;
+  const response = await publicApi.post('/api/recharge/query-task-status', body);
   return response.data;
 };
 
