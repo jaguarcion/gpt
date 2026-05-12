@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import os from 'os';
 import crypto from 'crypto';
+import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
@@ -46,6 +47,30 @@ const API_TOKEN = process.env.API_TOKEN;
 if (!API_TOKEN) {
     console.error('FATAL ERROR: API_TOKEN is not defined in .env');
     process.exit(1);
+}
+
+async function ensureProblematicValidationColumn() {
+    try {
+        const dbInfo = await prisma.$queryRaw`PRAGMA database_list`;
+        const mainDb = Array.isArray(dbInfo)
+            ? dbInfo.find((row) => row.name === 'main')
+            : null;
+
+        const columnRows = await prisma.$queryRaw`SELECT COUNT(*) as count FROM pragma_table_info('keys') WHERE name='problematicValidationCheckedAt'`;
+        let hasColumn = Number(columnRows?.[0]?.count || 0) > 0;
+
+        if (!hasColumn) {
+            console.warn('[DB Bootstrap] Missing keys.problematicValidationCheckedAt column. Applying runtime fix...');
+            await prisma.$executeRawUnsafe('ALTER TABLE "keys" ADD COLUMN "problematicValidationCheckedAt" DATETIME');
+            await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "keys_problematicValidationCheckedAt_idx" ON "keys"("problematicValidationCheckedAt")');
+            hasColumn = true;
+        }
+
+        console.log('[DB Bootstrap] SQLite main DB file:', mainDb?.file || '(unknown)');
+        console.log('[DB Bootstrap] keys.problematicValidationCheckedAt exists:', hasColumn);
+    } catch (e) {
+        console.error('[DB Bootstrap] Failed to verify/apply problematicValidationCheckedAt column:', e.message);
+    }
 }
 
 // ===================== RATE LIMIT TRACKING =====================
@@ -139,9 +164,18 @@ app.use((req, res, next) => {
 });
 
 // Security: Rate Limiter
+const hasValidAdminBearerToken = (req) => {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || typeof authHeader !== 'string') return false;
+    if (!authHeader.startsWith('Bearer ')) return false;
+    const token = authHeader.slice(7);
+    return token === API_TOKEN;
+};
+
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // Limit each IP to 1000 requests per windowMs
+    skip: (req) => req.path.startsWith('/api/') && hasValidAdminBearerToken(req),
     message: { error: 'Too many requests, please try again later.' },
     handler: (req, res) => {
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
@@ -189,7 +223,57 @@ const BASE_URL = 'https://receipt-api.nitro.xin';
 // Common headers for external activation API
 const EXTERNAL_API_HEADERS = {
     'X-Product-ID': 'chatgpt',
-    'Content-Type': 'text/plain;charset=UTF-8'
+    'Content-Type': 'text/plain;charset=UTF-8',
+    'Accept': 'application/json,text/plain,*/*',
+    'User-Agent': 'Mozilla/5.0 (compatible; GPT-Admin/1.0)'
+};
+const EXTERNAL_CHECK_TIMEOUT_MS = Number(process.env.EXTERNAL_CHECK_TIMEOUT_MS || 30000);
+const EXTERNAL_CHECK_RETRIES = Number(process.env.EXTERNAL_CHECK_RETRIES || 1);
+const externalHttpsAgent = new https.Agent({ keepAlive: true, family: 4 });
+
+const checkExternalKey = async (code) => {
+    const attempts = [];
+    const tryCount = Math.max(1, EXTERNAL_CHECK_RETRIES + 1);
+
+    for (let i = 0; i < tryCount; i++) {
+        // First attempt uses the same payload shape as existing stable activation flow.
+        const useJsonBody = i > 0;
+        try {
+            const payload = useJsonBody ? { code } : JSON.stringify({ code });
+            const headers = useJsonBody
+                ? { ...EXTERNAL_API_HEADERS, 'Content-Type': 'application/json' }
+                : EXTERNAL_API_HEADERS;
+
+            const response = await axios.post(
+                `${BASE_URL}/cdks/public/check`,
+                payload,
+                {
+                    headers,
+                    timeout: EXTERNAL_CHECK_TIMEOUT_MS,
+                    httpsAgent: externalHttpsAgent
+                }
+            );
+
+            return response.data || {};
+        } catch (err) {
+            attempts.push({
+                attempt: i + 1,
+                mode: useJsonBody ? 'json' : 'text',
+                message: err.message,
+                code: err.code,
+                status: err.response?.status
+            });
+
+            if (i === tryCount - 1) {
+                const details = attempts
+                    .map(a => `#${a.attempt}:${a.mode}:${a.code || 'NA'}:${a.status || 'NA'}:${a.message}`)
+                    .join(' | ');
+                const error = new Error(`External check failed after retries: ${details}`);
+                error.attempts = attempts;
+                throw error;
+            }
+        }
+    }
 };
 
 // Utility to wait
@@ -433,24 +517,252 @@ app.get('/api/logs/stats', authenticateToken, async (req, res) => {
 app.post('/api/keys', authenticateToken, async (req, res) => {
     try {
         const { code, codes } = req.body;
+        const requestId = `keys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const adminIp = getClientIp(req);
+
+        console.info('[KeyImport] request received', {
+            requestId,
+            bodyKeys: Object.keys(req.body || {}),
+            hasCode: typeof code === 'string',
+            codeLength: typeof code === 'string' ? code.length : 0,
+            hasCodesArray: Array.isArray(codes),
+            codesLength: Array.isArray(codes) ? codes.length : 0,
+            ip: getClientIp(req)
+        });
 
         // Handle bulk upload
         if (codes && Array.isArray(codes)) {
             const result = await KeyService.addKeys(codes);
-            await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp: getClientIp(req), source: 'admin' });
-            return res.json({ success: true, count: result.count });
+            console.info('[KeyImport] array payload processed', { requestId, ...result });
+            await LogService.log('KEY_ADDED', `Added ${result.count} keys via bulk upload`, null, { adminIp, source: 'admin' });
+            if (result.skippedExisting > 0 || result.updated > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
+                await LogService.log('KEY_IMPORT_DUPLICATES', {
+                    requestId,
+                    mode: 'array',
+                    inserted: result.inserted,
+                    updated: result.updated,
+                    received: result.received,
+                    unique: result.unique,
+                    skippedExisting: result.skippedExisting,
+                    skippedDuplicateInPayload: result.skippedDuplicateInPayload,
+                    failed: result.failed,
+                    errorSamples: result.errorSamples
+                }, null, { adminIp, source: 'admin' });
+            }
+            return res.json({ success: true, ...result });
         }
 
         // Handle single upload (legacy or simple)
         if (code) {
+            const normalizedCodes = KeyService.normalizeCodes(code);
+
+            console.info('[KeyImport] text payload normalized', {
+                requestId,
+                normalizedCount: normalizedCodes.length,
+                preview: normalizedCodes.slice(0, 5)
+            });
+
+            if (normalizedCodes.length > 1) {
+                const result = await KeyService.addKeys(normalizedCodes);
+                console.info('[KeyImport] text bulk payload processed', { requestId, ...result });
+                await LogService.log('KEY_ADDED', `Added ${result.count} keys via text bulk upload`, null, { adminIp, source: 'admin' });
+                if (result.skippedExisting > 0 || result.updated > 0 || result.failed > 0 || result.skippedDuplicateInPayload > 0) {
+                    await LogService.log('KEY_IMPORT_DUPLICATES', {
+                        requestId,
+                        mode: 'text',
+                        inserted: result.inserted,
+                        updated: result.updated,
+                        received: result.received,
+                        unique: result.unique,
+                        skippedExisting: result.skippedExisting,
+                        skippedDuplicateInPayload: result.skippedDuplicateInPayload,
+                        failed: result.failed,
+                        errorSamples: result.errorSamples
+                    }, null, { adminIp, source: 'admin' });
+                }
+                return res.json({ success: true, ...result });
+            }
+
             const key = await KeyService.addKey(code);
-            await LogService.log('KEY_ADDED', `Added single key: ${code}`, null, { adminIp: getClientIp(req), source: 'admin' });
+            console.info('[KeyImport] single key inserted', { requestId, code: code.trim() });
+            await LogService.log('KEY_ADDED', `Added single key: ${code}`, null, { adminIp, source: 'admin' });
             return res.json(key);
         }
 
         return res.status(400).json({ error: 'Code or codes array required' });
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/keys/debug-existing', authenticateToken, async (req, res) => {
+    try {
+        const { code, codes } = req.body;
+        const requestId = `keys-debug-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const payload = Array.isArray(codes) ? codes : code;
+        const inspection = await KeyService.inspectExistingKeys(payload, 100);
+        const adminIp = getClientIp(req);
+
+        console.info('[KeyImport] debug existing lookup', {
+            requestId,
+            received: inspection.received,
+            unique: inspection.unique,
+            existingCount: inspection.existingCount,
+            missingCount: inspection.missingCount,
+            duplicateInPayloadCount: inspection.duplicateInPayloadCount,
+            sampleExisting: inspection.sampleExisting
+        });
+
+        await LogService.log('KEY_IMPORT_DEBUG', {
+            requestId,
+            received: inspection.received,
+            unique: inspection.unique,
+            existingCount: inspection.existingCount,
+            missingCount: inspection.missingCount,
+            duplicateInPayloadCount: inspection.duplicateInPayloadCount,
+            sampleExisting: inspection.sampleExisting,
+            missingSample: inspection.missingSample
+        }, null, { adminIp, source: 'admin' });
+
+        return res.json({
+            success: true,
+            requestId,
+            received: inspection.received,
+            unique: inspection.unique,
+            existingCount: inspection.existingCount,
+            missingCount: inspection.missingCount,
+            duplicateInPayloadCount: inspection.duplicateInPayloadCount,
+            existing: inspection.existingRecords,
+            missingSample: inspection.missingSample
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/keys/validate-one', authenticateToken, async (req, res) => {
+    try {
+        const rawCode = req.body?.code;
+        console.info('[KeyValidation] validate-one hit', {
+            hasCode: typeof rawCode === 'string',
+            codeLength: typeof rawCode === 'string' ? rawCode.length : 0,
+            ip: getClientIp(req),
+            timeoutMs: EXTERNAL_CHECK_TIMEOUT_MS
+        });
+        if (!rawCode || typeof rawCode !== 'string') {
+            return res.status(400).json({ error: 'Поле code обязательно' });
+        }
+
+        const code = rawCode.trim();
+        if (!code) {
+            return res.status(400).json({ error: 'Ключ пустой' });
+        }
+
+        try {
+            const checkData = await checkExternalKey(code);
+            const isValid = !checkData.used;
+
+            return res.json({
+                success: true,
+                result: {
+                    code,
+                    status: isValid ? 'Valid' : 'NoValid',
+                    reason: isValid ? '' : 'Ключ уже использован',
+                    checkedAt: new Date().toISOString()
+                }
+            });
+        } catch (checkErr) {
+            const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
+            return res.json({
+                success: true,
+                result: {
+                    code,
+                    status: 'NoValid',
+                    reason: errorMsg,
+                    checkedAt: new Date().toISOString()
+                }
+            });
+        }
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/keys/validate-bulk', authenticateToken, async (req, res) => {
+    try {
+        const { code, codes } = req.body;
+        console.warn('[KeyValidation] validate-bulk hit (legacy client)', {
+            hasCode: typeof code === 'string',
+            codeLength: typeof code === 'string' ? code.length : 0,
+            hasCodesArray: Array.isArray(codes),
+            codesLength: Array.isArray(codes) ? codes.length : 0,
+            ip: getClientIp(req),
+            timeoutMs: EXTERNAL_CHECK_TIMEOUT_MS
+        });
+        const payload = Array.isArray(codes) ? codes : code;
+        const normalizedCodes = KeyService.normalizeCodes(payload);
+        const uniqueCodes = [...new Set(normalizedCodes)];
+
+        if (uniqueCodes.length === 0) {
+            return res.status(400).json({ error: 'Не переданы ключи для проверки' });
+        }
+
+        const results = [];
+        let valid = 0;
+        let noValid = 0;
+        const chunkSize = 5;
+
+        for (let i = 0; i < uniqueCodes.length; i += chunkSize) {
+            const chunk = uniqueCodes.slice(i, i + chunkSize);
+            const chunkResults = await Promise.all(
+                chunk.map(async (keyCode) => {
+                    try {
+                        const checkData = await checkExternalKey(keyCode);
+                        const isValid = !checkData.used;
+
+                        if (isValid) valid++;
+                        else noValid++;
+
+                        return {
+                            code: keyCode,
+                            status: isValid ? 'Valid' : 'NoValid',
+                            reason: isValid ? '' : 'Ключ уже использован',
+                            checkedAt: new Date().toISOString()
+                        };
+                    } catch (checkErr) {
+                        noValid++;
+                        const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
+                        return {
+                            code: keyCode,
+                            status: 'NoValid',
+                            reason: errorMsg,
+                            checkedAt: new Date().toISOString()
+                        };
+                    }
+                })
+            );
+
+            results.push(...chunkResults);
+        }
+
+        await LogService.log('KEY_BULK_VALIDATION', {
+            total: uniqueCodes.length,
+            valid,
+            noValid,
+            duplicateInPayload: normalizedCodes.length - uniqueCodes.length,
+            sampleNoValid: results.filter(r => r.status === 'NoValid').slice(0, 20)
+        }, null, { adminIp: getClientIp(req), source: 'admin' });
+
+        return res.json({
+            success: true,
+            total: uniqueCodes.length,
+            valid,
+            noValid,
+            duplicateInPayload: normalizedCodes.length - uniqueCodes.length,
+            results
+        });
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
     }
 });
 
@@ -462,6 +774,16 @@ app.get('/api/keys', authenticateToken, async (req, res) => {
 
         const result = await KeyService.getAllKeys(page, limit, status);
         res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/keys/active', authenticateToken, async (req, res) => {
+    try {
+        const result = await KeyService.deleteActiveKeys();
+        await LogService.log('KEY_DELETE_ACTIVE', `Deleted all active keys: ${result.deleted}`, null, { adminIp: getClientIp(req), source: 'admin' });
+        res.json({ success: true, deleted: result.deleted });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -601,6 +923,212 @@ app.post('/api/keys/validate-active', authenticateToken, async (req, res) => {
     } catch (e) {
         console.error('Validate Active Keys Error:', e);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// Cached check: does the DB actually have the problematicValidationCheckedAt column?
+// Returns false if migration hasn't been applied yet (allows endpoint to work without it).
+let _probCheckedAtColExists = null;
+async function probCheckedAtColExists() {
+    if (_probCheckedAtColExists !== null) return _probCheckedAtColExists;
+    try {
+        const rows = await prisma.$queryRaw`SELECT COUNT(*) as count FROM pragma_table_info('keys') WHERE name='problematicValidationCheckedAt'`;
+        _probCheckedAtColExists = Number(rows[0].count) > 0;
+    } catch {
+        _probCheckedAtColExists = false;
+    }
+    return _probCheckedAtColExists;
+}
+
+app.post('/api/keys/validate-problematic', authenticateToken, async (req, res) => {
+    try {
+        const requestedIds = Array.isArray(req.body?.ids)
+            ? req.body.ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+            : [];
+
+        const requestedLimitRaw = Number(req.body?.limit);
+        const requestedLimit = Number.isInteger(requestedLimitRaw) && requestedLimitRaw > 0
+            ? Math.min(requestedLimitRaw, 500)
+            : 50;
+
+        const hasCheckedAtCol = await probCheckedAtColExists();
+
+        const baseSelect = {
+            id: true,
+            code: true,
+            status: true,
+            usedByEmail: true,
+            usedAt: true,
+            subscriptionId: true,
+            ...(hasCheckedAtCol && { problematicValidationCheckedAt: true })
+        };
+
+        let recentWindow = [];
+        if (requestedIds.length > 0) {
+            recentWindow = await prisma.key.findMany({
+                where: {
+                    status: 'problematic',
+                    id: { in: requestedIds }
+                },
+                select: baseSelect,
+                orderBy: [
+                    { usedAt: 'desc' },
+                    { createdAt: 'desc' }
+                ]
+            });
+        } else {
+            recentWindow = await prisma.key.findMany({
+                where: { status: 'problematic' },
+                select: baseSelect,
+                orderBy: [
+                    { usedAt: 'desc' },
+                    { createdAt: 'desc' }
+                ],
+                take: requestedLimit
+            });
+        }
+
+        const problematicKeys = recentWindow;
+        const skippedAlreadyChecked = 0;
+
+        if (recentWindow.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Нет problematic-ключей для проверки',
+                total: 0,
+                windowSize: 0,
+                checkedNow: 0,
+                skippedAlreadyChecked: 0,
+                stillProblematic: 0,
+                recovered: 0,
+                conflicts: 0,
+                failed: 0,
+                results: []
+            });
+        }
+
+        const results = [];
+        let stillProblematic = 0;
+        let recovered = 0;
+        let conflicts = 0;
+        let failed = 0;
+
+        for (const key of problematicKeys) {
+            try {
+                const checkData = await checkExternalKey(key.code);
+                const checkedAt = new Date();
+
+                if (checkData.used) {
+                    if (hasCheckedAtCol) {
+                        await prisma.key.update({
+                            where: { id: key.id },
+                            data: { problematicValidationCheckedAt: checkedAt }
+                        });
+                    }
+
+                    stillProblematic++;
+                    results.push({
+                        id: key.id,
+                        code: key.code,
+                        state: 'still-problematic',
+                        message: 'Ключ остается problematic (внешняя проверка: used)'
+                    });
+                    continue;
+                }
+
+                if (key.subscriptionId) {
+                    if (hasCheckedAtCol) {
+                        await prisma.key.update({
+                            where: { id: key.id },
+                            data: { problematicValidationCheckedAt: checkedAt }
+                        });
+                    }
+
+                    conflicts++;
+                    results.push({
+                        id: key.id,
+                        code: key.code,
+                        state: 'conflict',
+                        message: `Внешняя проверка показывает not-used, но ключ привязан к подписке #${key.subscriptionId}`
+                    });
+                    continue;
+                }
+
+                await prisma.key.update({
+                    where: { id: key.id },
+                    data: {
+                        status: 'active',
+                        usedAt: null,
+                        usedByEmail: null,
+                        subscriptionId: null,
+                        ...(hasCheckedAtCol && { problematicValidationCheckedAt: checkedAt })
+                    }
+                });
+
+                recovered++;
+                results.push({
+                    id: key.id,
+                    code: key.code,
+                    state: 'recovered',
+                    message: 'Ключ возвращен в active (внешняя проверка not-used)'
+                });
+            } catch (checkErr) {
+                failed++;
+                const errorMsg = checkErr.response?.data?.message || checkErr.message || 'Ошибка проверки';
+                const checkedAt = new Date();
+
+                if (hasCheckedAtCol) {
+                    try {
+                        await prisma.key.update({
+                            where: { id: key.id },
+                            data: { problematicValidationCheckedAt: checkedAt }
+                        });
+                    } catch (markErr) {
+                        console.error(`Failed to mark problematic-validation check for key ${key.id}:`, markErr);
+                    }
+                }
+
+                results.push({
+                    id: key.id,
+                    code: key.code,
+                    state: 'failed',
+                    message: errorMsg
+                });
+            }
+        }
+
+        await LogService.log('KEYS_VALIDATE_PROBLEMATIC', {
+            total: recentWindow.length,
+            checkedNow: problematicKeys.length,
+            skippedAlreadyChecked,
+            stillProblematic,
+            recovered,
+            conflicts,
+            failed,
+            selectedCount: requestedIds.length || null,
+            limit: requestedIds.length > 0 ? null : requestedLimit,
+            sample: results.slice(0, 30)
+        }, null, {
+            adminIp: getClientIp(req),
+            source: 'admin'
+        });
+
+        return res.json({
+            success: true,
+            message: `Проверено ${problematicKeys.length}: осталось problematic ${stillProblematic}, восстановлено ${recovered}, конфликтов ${conflicts}, ошибок ${failed}`,
+            total: recentWindow.length,
+            windowSize: recentWindow.length,
+            checkedNow: problematicKeys.length,
+            skippedAlreadyChecked,
+            stillProblematic,
+            recovered,
+            conflicts,
+            failed,
+            results
+        });
+    } catch (e) {
+        console.error('Validate Problematic Keys Error:', e);
+        return res.status(500).json({ error: e.message });
     }
 });
 
@@ -950,8 +1478,8 @@ app.post('/api/activate-key', authenticateToken, async (req, res) => {
 
                 console.log(`[${cdk}] Poll ${attempts}: pending=${status.pending}, success=${status.success}`);
 
-                // Return immediately on success, even if pending is still true
-                if (status.success === true) {
+                // Treat as success only when operation is finalized.
+                if (status.success === true && status.pending === false) {
                     console.log(`[${cdk}] Activation SUCCESS!`);
                     return res.json({ success: true, message: 'Successfully activated', data: status });
                 }
@@ -1780,6 +2308,7 @@ app.post('/api/db/query', authenticateToken, async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', async () => {
+    await ensureProblematicValidationColumn();
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Endpoint: POST http://localhost:${PORT}/api/activate-key`);
 });

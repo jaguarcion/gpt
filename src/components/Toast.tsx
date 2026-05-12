@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -48,14 +48,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         }
     }, [removeToast]);
 
-    const ctx: ToastContextType = {
+    const ctx: ToastContextType = useMemo(() => ({
         toast: addToast,
         success: (msg) => addToast(msg, 'success'),
         error: (msg) => addToast(msg, 'error'),
         warning: (msg) => addToast(msg, 'warning'),
         info: (msg) => addToast(msg, 'info'),
         undo: addUndoToast,
-    };
+    }), [addToast, addUndoToast]);
 
     // ... (imports remain)
 

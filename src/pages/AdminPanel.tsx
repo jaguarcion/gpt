@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getStats, getKeys, addKey, setAuthToken, deleteKey, validateActiveKeys } from '../services/api';
+import { getStats, getKeys, addKey, setAuthToken, deleteKey, deleteActiveKeys, validateActiveKeys, validateProblematicKeys } from '../services/api';
 import { Layout } from '../components/Layout';
 import { ColumnSelector, useColumnVisibility, type Column } from '../components/ColumnSelector';
 import { SkeletonCards, SkeletonTable } from '../components/Skeleton';
@@ -44,6 +44,7 @@ export function AdminPanel() {
   const confirm = useConfirm();
   const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
   const [validating, setValidating] = useState(false);
+    const [problematicValidationLimit, setProblematicValidationLimit] = useState(50);
 
   const loadData = async (currentPage = page, currentStatus = statusFilter) => {
     try {
@@ -62,33 +63,42 @@ export function AdminPanel() {
   useEffect(() => {
     const savedToken = localStorage.getItem('adminToken');
     if (!savedToken) {
-      navigate('/admin');
+            navigate('/login');
       return;
     }
     setAuthToken(savedToken);
     loadData(1, 'all')
-      .catch(() => { navigate('/admin'); })
+            .catch((e) => {
+                console.error('Initial keys load failed:', e);
+                toast.error('Не удалось загрузить ключи. Проверьте сервер и базу данных.');
+            })
       .finally(() => setLoading(false));
-  }, []);
+    }, [navigate]);
 
   // Reload when page or filter changes
   useEffect(() => {
       if (!loading) {
-          loadData();
+                    loadData().catch((e) => {
+                            console.error('Reload keys failed:', e);
+                            toast.error('Ошибка обновления списка ключей');
+                    });
       }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, loading]);
 
   const handleAddKey = async () => {
     try {
       if (!newKeyCodes.trim()) return;
-      
-      const codes = newKeyCodes.split('\n').map(k => k.trim()).filter(k => k.length > 0);
-      
-      if (codes.length === 0) return;
 
-      await addKey(codes);
+            const result = await addKey(newKeyCodes);
       setNewKeyCodes('');
-      toast.success(`Успешно добавлено ключей: ${codes.length}`);
+            const inserted = result?.inserted ?? result?.count ?? (result?.id ? 1 : 0);
+            const updated = result?.updated ?? 0;
+            const skipped = result?.skipped ?? 0;
+            const parts: string[] = [];
+            if (inserted > 0) parts.push(`добавлено ${inserted}`);
+            if (updated > 0) parts.push(`восстановлено ${updated}`);
+            if (skipped > 0) parts.push(`пропущено ${skipped}`);
+            toast.success(parts.length > 0 ? `Ключей: ${parts.join(', ')}` : 'Импорт завершён');
       loadData();
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message);
@@ -120,6 +130,23 @@ export function AdminPanel() {
               loadData();
           }
       }, 5500);
+  };
+
+  const handleDeleteAllActive = async () => {
+      const ok = await confirm({
+          title: 'Удалить все Active ключи',
+          message: `Удалить ВСЕ ключи со статусом Active? Это действие нельзя отменить.`,
+          confirmText: 'Удалить все',
+          variant: 'danger',
+      });
+      if (!ok) return;
+      try {
+          const result = await deleteActiveKeys();
+          toast.success(`Удалено ${result.deleted} ключей`);
+          loadData();
+      } catch (e: any) {
+          toast.error(e.response?.data?.error || e.message);
+      }
   };
 
   const handleExportCSV = async () => {
@@ -225,6 +252,43 @@ export function AdminPanel() {
       }
   };
 
+  const handleValidateProblematicKeys = async () => {
+      const selectedProblematicIds = keys
+          .filter(k => selectedKeys.includes(k.id) && k.status === 'problematic')
+          .map(k => k.id);
+
+      const useSelected = selectedProblematicIds.length > 0;
+      const safeLimit = Number.isFinite(problematicValidationLimit)
+          ? Math.max(1, Math.min(500, Math.trunc(problematicValidationLimit)))
+          : 50;
+
+      const ok = await confirm({
+          title: 'Проверка Problematic ключей',
+          message: useSelected
+              ? `Проверить выбранные Problematic-ключи (${selectedProblematicIds.length})? Для ключей not-used без привязки к подписке статус вернется в Active.`
+              : `Проверить последние ${safeLimit} Problematic-ключей? Для ключей not-used без привязки к подписке статус вернется в Active.`,
+          confirmText: 'Проверить',
+      });
+      if (!ok) return;
+
+      setValidating(true);
+      try {
+          const result = await validateProblematicKeys({
+              ids: useSelected ? selectedProblematicIds : undefined,
+              limit: useSelected ? undefined : safeLimit
+          });
+          toast.success(
+              `Проверено ${result.checkedNow ?? 0}: осталось problematic ${result.stillProblematic ?? 0}, восстановлено ${result.recovered}, конфликтов ${result.conflicts}, ошибок ${result.failed}`
+          );
+          setSelectedKeys([]);
+          loadData();
+      } catch (e: any) {
+          toast.error('Ошибка при проверке Problematic-ключей: ' + (e.response?.data?.error || e.message));
+      } finally {
+          setValidating(false);
+      }
+  };
+
   const { sorted: sortedKeys, sortKey, sortDirection, toggleSort } = useSortable(keys);
 
   if (loading) {
@@ -261,7 +325,7 @@ export function AdminPanel() {
             <textarea
               value={newKeyCodes}
               onChange={(e) => setNewKeyCodes(e.target.value)}
-              placeholder="Вставьте ключи, каждый с новой строки..."
+                            placeholder="Вставьте ключи: можно с новой строки, через пробел, таб, запятую или ;"
               rows={5}
               className="w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 focus:outline-none font-mono text-sm"
             />
@@ -298,9 +362,23 @@ export function AdminPanel() {
                     >
                         Used
                     </button>
+                    <button 
+                        onClick={() => { setStatusFilter('problematic'); setPage(1); }}
+                        className={`px-3 py-1 rounded-md text-sm transition-colors ${statusFilter === 'problematic' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/20' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                    >
+                        Problematic
+                    </button>
                 </div>
                 <TableDensityToggle density={density} onToggle={toggleDensity} />
                 <ColumnSelector columns={keyColumns} visible={visibleCols} onToggle={toggleCol} onReset={resetCols} />
+                <button 
+                    onClick={handleDeleteAllActive}
+                    disabled={statusFilter !== 'active'}
+                    className="text-sm px-3 py-1 bg-red-600 hover:bg-red-700 disabled:bg-zinc-400 disabled:cursor-not-allowed rounded-md transition-colors text-white"
+                    title={statusFilter !== 'active' ? 'Переключитесь на фильтр "Active" для удаления' : 'Удалить все Active ключи'}
+                >
+                    Удалить все Active
+                </button>
                 <button 
                     onClick={handleValidateActiveKeys}
                     disabled={validating || statusFilter !== 'active'}
@@ -324,6 +402,47 @@ export function AdminPanel() {
                         </>
                     )}
                 </button>
+                <button 
+                    onClick={handleValidateProblematicKeys}
+                    disabled={validating || statusFilter !== 'problematic'}
+                    className="text-sm px-3 py-1 bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-400 disabled:cursor-not-allowed rounded-md transition-colors text-white flex items-center gap-2"
+                    title={statusFilter !== 'problematic' ? 'Переключитесь на фильтр "Problematic" для проверки' : (selectedKeys.length > 0 ? 'Проверить выбранные Problematic-ключи' : 'Проверить последние Problematic-ключи')}
+                >
+                    {validating ? (
+                        <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Проверка...
+                        </>
+                    ) : (
+                        <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Проверить Problematic
+                        </>
+                    )}
+                </button>
+                <div className="flex items-center gap-2">
+                    <label htmlFor="problematic-limit" className="text-xs text-zinc-500">N:</label>
+                    <input
+                        id="problematic-limit"
+                        type="number"
+                        min={1}
+                        max={500}
+                        step={1}
+                        value={problematicValidationLimit}
+                        onChange={(e) => {
+                            const value = Number(e.target.value);
+                            if (!Number.isNaN(value)) setProblematicValidationLimit(value);
+                        }}
+                        disabled={validating || statusFilter !== 'problematic' || selectedKeys.length > 0}
+                        className="w-20 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-sm text-zinc-700 dark:text-zinc-300 disabled:opacity-60"
+                        title={selectedKeys.length > 0 ? 'При выбранных ключах лимит N не используется' : 'Сколько последних Problematic-ключей проверять'}
+                    />
+                </div>
                 <button 
                     onClick={handleExportCSV}
                     className="text-sm px-3 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-md transition-colors text-zinc-700 dark:text-zinc-300"

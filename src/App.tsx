@@ -17,6 +17,7 @@ import { Changelog } from './pages/Changelog';
 import { Settings } from './pages/Settings';
 import { ActivationQueue } from './pages/ActivationQueue';
 import { DatabaseExplorer } from './pages/DatabaseExplorer';
+import { KeyValidation } from './pages/KeyValidation';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ToastProvider } from './components/Toast';
 import { ConfirmProvider } from './components/ConfirmDialog';
@@ -48,6 +49,7 @@ function AnimatedRoutes() {
         <Route path="/admin/changelog" element={<ProtectedRoute><PageTransition><Changelog /></PageTransition></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute><PageTransition><Settings /></PageTransition></ProtectedRoute>} />
         <Route path="/admin/queue" element={<ProtectedRoute><PageTransition><ActivationQueue /></PageTransition></ProtectedRoute>} />
+        <Route path="/admin/key-validation" element={<ProtectedRoute><PageTransition><KeyValidation /></PageTransition></ProtectedRoute>} />
         <Route path="/admin/db" element={<ProtectedRoute><PageTransition><DatabaseExplorer /></PageTransition></ProtectedRoute>} />
       </Routes>
     </AnimatePresence>

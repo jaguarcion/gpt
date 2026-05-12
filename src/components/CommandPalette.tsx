@@ -19,6 +19,7 @@ const PAGES = [
   { path: '/admin/calendar', label: 'Календарь продлений', icon: CalendarIcon, keywords: 'calendar расписание продления' },
   { path: '/admin/logs', label: 'Логи', icon: FileText, keywords: 'logs активность журнал' },
   { path: '/admin/health', label: 'Состояние системы', icon: Activity, keywords: 'health система мониторинг' },
+  { path: '/admin/key-validation', label: 'Проверка ключей', icon: Key, keywords: 'проверка валидация valid novalid ключи' },
   { path: '/admin/backups', label: 'Бэкапы', icon: Database, keywords: 'backups резервные копии' },
   { path: '/admin/rate-limit', label: 'Rate Limit', icon: Gauge, keywords: 'rate limit лимиты запросы' },
   { path: '/admin/changelog', label: 'Changelog', icon: Clock, keywords: 'changelog изменения версии' },

@@ -106,6 +106,11 @@ export const deleteKey = async (id: number) => {
   return response.data;
 };
 
+export const deleteActiveKeys = async () => {
+  const response = await adminApi.delete('/keys/active');
+  return response.data;
+};
+
 export const addKey = async (codes: string | string[]) => {
   if (Array.isArray(codes)) {
     const response = await adminApi.post('/keys', { codes });
@@ -229,5 +234,33 @@ export const validateAllSessions = async () => {
 
 export const validateActiveKeys = async () => {
   const response = await adminApi.post('/keys/validate-active');
+  return response.data;
+};
+
+export const validateProblematicKeys = async (params?: { ids?: number[]; limit?: number }) => {
+  const payload: { ids?: number[]; limit?: number } = {};
+
+  if (Array.isArray(params?.ids) && params.ids.length > 0) {
+    payload.ids = params.ids;
+  }
+  if (typeof params?.limit === 'number' && Number.isInteger(params.limit) && params.limit > 0) {
+    payload.limit = params.limit;
+  }
+
+  const response = await adminApi.post('/keys/validate-problematic', payload);
+  return response.data;
+};
+
+export const validateKeysBulk = async (codes: string | string[]) => {
+  if (Array.isArray(codes)) {
+    const response = await adminApi.post('/keys/validate-bulk', { codes });
+    return response.data;
+  }
+  const response = await adminApi.post('/keys/validate-bulk', { code: codes });
+  return response.data;
+};
+
+export const validateOneKey = async (code: string) => {
+  const response = await adminApi.post('/keys/validate-one', { code });
   return response.data;
 };

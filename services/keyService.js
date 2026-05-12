@@ -1,6 +1,52 @@
 import prisma from './db.js';
 
 export class KeyService {
+    static _hasProblematicCheckedAtColumn = null;
+
+    static keyListSelect = {
+        id: true,
+        code: true,
+        status: true,
+        usedAt: true,
+        usedByEmail: true,
+        createdAt: true,
+        subscriptionId: true
+    };
+
+    static async hasProblematicCheckedAtColumn() {
+        if (this._hasProblematicCheckedAtColumn !== null) return this._hasProblematicCheckedAtColumn;
+        try {
+            const rows = await prisma.$queryRaw`SELECT COUNT(*) as count FROM pragma_table_info('keys') WHERE name='problematicValidationCheckedAt'`;
+            this._hasProblematicCheckedAtColumn = Number(rows[0].count) > 0;
+        } catch {
+            this._hasProblematicCheckedAtColumn = false;
+        }
+        return this._hasProblematicCheckedAtColumn;
+    }
+
+    static isMissingProblematicCheckedAtColumnError(error) {
+        const msg = String(error?.message || '').toLowerCase();
+        return msg.includes('problematicvalidationcheckedat') && msg.includes('does not exist');
+    }
+
+    static normalizeCodes(input) {
+        const values = Array.isArray(input) ? input : [input];
+        const normalized = [];
+
+        for (const value of values) {
+            if (typeof value !== 'string') continue;
+
+            const parts = value
+                .split(/[\s,;]+/)
+                .map(part => part.trim())
+                .filter(Boolean);
+
+            normalized.push(...parts);
+        }
+
+        return normalized;
+    }
+
     static async addKey(code) {
         return prisma.key.create({
             data: {
@@ -10,35 +56,119 @@ export class KeyService {
         });
     }
 
-    static async addKeys(codes) {
-        // Create multiple keys. SQLite doesn't support createMany nicely with unique constraints in Prisma sometimes,
-        // but let's try standard createMany. It skips duplicates only if supported, but Prisma throws error on duplicate unique.
-        // We will filter existing first or catch errors.
-        // Simple approach: loop and create, ignoring errors. Or createMany.
-        // createMany is supported in SQLite since Prisma 2.x, but it doesn't return created records.
-        // Also it throws if ANY unique constraint fails.
-        // So we should probably do one by one or filter first.
-        
-        let addedCount = 0;
-        for (const rawCode of codes) {
-            if (!rawCode || typeof rawCode !== 'string') continue;
-            const code = rawCode.trim();
-            if (code.length === 0) continue;
+    static async inspectExistingKeys(codes, sampleLimit = 20) {
+        const normalizedCodes = this.normalizeCodes(codes);
+        const uniqueCodes = [...new Set(normalizedCodes)];
+        const duplicateInPayloadCount = normalizedCodes.length - uniqueCodes.length;
 
+        if (uniqueCodes.length === 0) {
+            return {
+                received: 0,
+                unique: 0,
+                duplicateInPayloadCount: 0,
+                existingCount: 0,
+                missingCount: 0,
+                existingCodes: new Set(),
+                existingRecords: [],
+                sampleExisting: [],
+                missingSample: []
+            };
+        }
+
+        const existingRecords = await prisma.key.findMany({
+            where: {
+                code: {
+                    in: uniqueCodes
+                }
+            },
+            select: {
+                id: true,
+                code: true,
+                status: true,
+                createdAt: true,
+                usedAt: true,
+                usedByEmail: true,
+                subscriptionId: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        const existingCodes = new Set(existingRecords.map(record => record.code));
+        const missingCodes = uniqueCodes.filter(code => !existingCodes.has(code));
+
+        return {
+            received: normalizedCodes.length,
+            unique: uniqueCodes.length,
+            duplicateInPayloadCount,
+            existingCount: existingRecords.length,
+            missingCount: missingCodes.length,
+            existingCodes,
+            existingRecords,
+            sampleExisting: existingRecords.slice(0, sampleLimit),
+            missingSample: missingCodes.slice(0, sampleLimit)
+        };
+    }
+
+    static async addKeys(codes) {
+        const normalizedCodes = [...new Set(this.normalizeCodes(codes))];
+        const duplicateInPayloadCount = this.normalizeCodes(codes).length - normalizedCodes.length;
+
+        let addedCount = 0;
+        let updatedCount = 0;
+        let failedCount = 0;
+        const errorSamples = [];
+
+        for (const code of normalizedCodes) {
             try {
-                // Check if exists
-                const existing = await prisma.key.findUnique({ where: { code } });
-                if (!existing) {
-                    await prisma.key.create({
-                        data: { code, status: 'active' }
-                    });
+                const existing = await prisma.key.findUnique({ where: { code }, select: { id: true, status: true } });
+                if (existing) {
+                    if (existing.status !== 'active') {
+                        await prisma.key.update({
+                            where: { id: existing.id },
+                            data: {
+                                status: 'active',
+                                usedAt: null,
+                                usedByEmail: null,
+                                subscriptionId: null
+                            }
+                        });
+
+                        updatedCount++;
+                    }
+                    // already active — count as skipped duplicate (no-op)
+                } else {
+                    await prisma.key.create({ data: { code, status: 'active' } });
                     addedCount++;
                 }
             } catch (e) {
-                console.error(`Failed to add key ${code}:`, e.message);
+                failedCount++;
+                if (errorSamples.length < 5) {
+                    errorSamples.push({ code, message: e.message });
+                }
+                console.error(`Failed to add/update key ${code}:`, e.message);
             }
         }
-        return { count: addedCount };
+
+        const skippedActiveCount = normalizedCodes.length - addedCount - updatedCount - failedCount;
+
+        const result = {
+            count: addedCount + updatedCount,
+            inserted: addedCount,
+            updated: updatedCount,
+            received: this.normalizeCodes(codes).length,
+            unique: normalizedCodes.length,
+            skipped: skippedActiveCount + duplicateInPayloadCount,
+            skippedExisting: skippedActiveCount,
+            skippedDuplicateInPayload: duplicateInPayloadCount,
+            failed: failedCount,
+            errorSamples,
+        };
+
+        console.info('[KeyImport] addKeys summary', result);
+
+        return result;
     }
 
     static async getAvailableKey() {
@@ -81,6 +211,8 @@ export class KeyService {
     }
 
     static async recoverUserErrorKeys() {
+        const hasProblematicCheckedAtColumn = await this.hasProblematicCheckedAtColumn();
+
         // Find keys marked as problematic due to user errors (not key errors)
         const problematicKeys = await prisma.key.findMany({
             where: {
@@ -94,14 +226,31 @@ export class KeyService {
         let recovered = 0;
         for (const key of problematicKeys) {
             try {
-                await prisma.key.update({
-                    where: { id: key.id },
-                    data: {
-                        status: 'active',
-                        usedAt: null,
-                        usedByEmail: null
-                    }
-                });
+                const baseData = {
+                    status: 'active',
+                    usedAt: null,
+                    usedByEmail: null,
+                    ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
+                };
+
+                try {
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: baseData
+                    });
+                } catch (e) {
+                    if (!this.isMissingProblematicCheckedAtColumnError(e)) throw e;
+                    this._hasProblematicCheckedAtColumn = false;
+                    await prisma.key.update({
+                        where: { id: key.id },
+                        data: {
+                            status: 'active',
+                            usedAt: null,
+                            usedByEmail: null
+                        }
+                    });
+                }
+
                 recovered++;
                 console.log(`Recovered key ${key.id}: ${key.code}`);
             } catch (e) {
@@ -113,20 +262,40 @@ export class KeyService {
     }
 
     static async markKeyAsUsed(id, email, subscriptionId) {
-        return prisma.key.update({
-            where: { id },
-            data: {
-                status: 'used',
-                usedAt: new Date(),
-                usedByEmail: email,
-                subscriptionId: subscriptionId
-            }
-        });
+        const hasProblematicCheckedAtColumn = await this.hasProblematicCheckedAtColumn();
+
+        const baseData = {
+            status: 'used',
+            usedAt: new Date(),
+            usedByEmail: email,
+            subscriptionId: subscriptionId,
+            ...(hasProblematicCheckedAtColumn && { problematicValidationCheckedAt: null })
+        };
+
+        try {
+            return await prisma.key.update({
+                where: { id },
+                data: baseData
+            });
+        } catch (e) {
+            if (!this.isMissingProblematicCheckedAtColumnError(e)) throw e;
+            this._hasProblematicCheckedAtColumn = false;
+            return prisma.key.update({
+                where: { id },
+                data: {
+                    status: 'used',
+                    usedAt: new Date(),
+                    usedByEmail: email,
+                    subscriptionId: subscriptionId
+                }
+            });
+        }
     }
 
     static async getAllKeys(page = 1, limit = 20, status = 'all') {
         if (limit === -1) {
              return prisma.key.findMany({
+                     select: this.keyListSelect,
                 orderBy: { createdAt: 'desc' }
              });
         }
@@ -141,6 +310,7 @@ export class KeyService {
         const [keys, total] = await Promise.all([
             prisma.key.findMany({
                 where,
+                select: this.keyListSelect,
                 skip,
                 take: limit,
                 orderBy: { createdAt: 'desc' }
@@ -155,6 +325,13 @@ export class KeyService {
         return prisma.key.delete({
             where: { id: Number(id) }
         });
+    }
+
+    static async deleteActiveKeys() {
+        const result = await prisma.key.deleteMany({
+            where: { status: 'active' }
+        });
+        return { deleted: result.count };
     }
 
     static async getStats() {
